@@ -1,0 +1,12 @@
+tracing:
+  serviceName: pp-blnc
+rest:
+  host: localhost
+  port: 8081
+  metricsUrl: /metrics
+  clientRetriesMax: 2
+logging:
+  level: 6 # trace
+balance:
+  retryMax: 2
+  requestUrl: http://localhost:8080

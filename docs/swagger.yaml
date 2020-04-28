@@ -1,0 +1,117 @@
+definitions:
+  domain.Body:
+    additionalProperties: true
+    type: object
+  domain.Error:
+    properties:
+      message:
+        type: string
+    type: object
+  domain.ReadMapping:
+    properties:
+      body:
+        $ref: '#/definitions/domain.Body'
+        type: object
+      id:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: This is a PP-Gin application.
+  license: {}
+  title: PP Gin
+  version: 0.0.1
+paths:
+  /mapping:
+    get:
+      consumes:
+      - application/json
+      description: Method to get all read mappings
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.ReadMapping'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Get Read Mappings
+      tags:
+      - Read Mapping
+    post:
+      consumes:
+      - application/json
+      description: Method to create read mapping
+      parameters:
+      - description: Read Mapping (without id)
+        in: body
+        name: read_mapping
+        required: true
+        schema:
+          $ref: '#/definitions/domain.ReadMapping'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ReadMapping'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Create Read Mapping
+      tags:
+      - Read Mapping
+  /mapping/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Method to delete read mapping by id
+      parameters:
+      - description: Read Mapping Id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200": {}
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Delete Read Mapping by Id
+      tags:
+      - Read Mapping
+    get:
+      consumes:
+      - application/json
+      description: Method to get read mapping by id
+      parameters:
+      - description: Read Mapping Id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ReadMapping'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Get Read Mapping by Id
+      tags:
+      - Read Mapping
+swagger: "2.0"

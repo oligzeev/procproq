@@ -1,0 +1,26 @@
+tracing:
+  serviceName: pp-gin
+rest:
+  host: localhost
+  port: 8080
+  swaggerUrl: /swagger
+  metricsUrl: /metrics
+  clientRetriesMax: 2 # default, but there's no login now
+db:
+  host: localhost
+  port: 5432
+  user: pg
+  password: pg
+  dbName: pg
+  maxConnections: 10
+  maxIdleConnections: 2
+cache:
+  defaultEntityCount: 20
+logging:
+  level: 6 # trace
+scheduler:
+  enabled: true
+  periodSec: 5
+  sendJobTimeoutSec: 60
+  sendJobRetriesMax: 2
+  jobLimit: 100

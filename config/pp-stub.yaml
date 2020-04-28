@@ -1,0 +1,13 @@
+tracing:
+  serviceName: pp-stub
+rest:
+  host: localhost
+  port: 8082
+  metricsUrl: /metrics
+  clientRetriesMax: 2
+logging:
+  level: 6 # trace
+stub:
+  responseUrl: http://localhost:8080/job/complete
+  sendJobTimeoutSec: 60
+  sendJobRetriesMax: 2

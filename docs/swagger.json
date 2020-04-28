@@ -1,0 +1,177 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "This is a PP-Gin application.",
+        "title": "PP Gin",
+        "contact": {},
+        "license": {},
+        "version": "0.0.1"
+    },
+    "paths": {
+        "/mapping": {
+            "get": {
+                "description": "Method to get all read mappings",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Read Mapping"
+                ],
+                "summary": "Get Read Mappings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.ReadMapping"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Error"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Method to create read mapping",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Read Mapping"
+                ],
+                "summary": "Create Read Mapping",
+                "parameters": [
+                    {
+                        "description": "Read Mapping (without id)",
+                        "name": "read_mapping",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.ReadMapping"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ReadMapping"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/mapping/{id}": {
+            "get": {
+                "description": "Method to get read mapping by id",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Read Mapping"
+                ],
+                "summary": "Get Read Mapping by Id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Read Mapping Id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.ReadMapping"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Error"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Method to delete read mapping by id",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Read Mapping"
+                ],
+                "summary": "Delete Read Mapping by Id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Read Mapping Id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {},
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Error"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "domain.Body": {
+            "type": "object",
+            "additionalProperties": true
+        },
+        "domain.Error": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.ReadMapping": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "object",
+                    "$ref": "#/definitions/domain.Body"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}
