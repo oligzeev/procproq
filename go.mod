@@ -9,6 +9,7 @@ require (
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/fvbock/endless v0.0.0-20170109170031-447134032cb6
+	github.com/gin-contrib/pprof v1.3.0
 	github.com/gin-gonic/gin v1.6.2
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/google/uuid v1.1.1

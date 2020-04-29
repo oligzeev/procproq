@@ -21,6 +21,8 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/gin-contrib/pprof"
+
 	_ "example.com/oligzeev/pp-gin/docs"
 )
 
@@ -119,6 +121,11 @@ func initRouter(cfg config.RestConfig, handlers []domain.RestHandler) *gin.Engin
 	// Prometheus handler initialization
 	// prom := ginprom.NewPrometheus("gin") and prom.Use(router)
 	router.GET(cfg.MetricsUrl, metrics.PrometheusHandler())
+
+	// PProf handler initialization
+	// https://github.com/gin-contrib/pprof
+	// go tool pprof http://localhost:8080/debug/pprof/profile?seconds=30
+	pprof.Register(router)
 
 	for _, handler := range handlers {
 		handler.Register(router)

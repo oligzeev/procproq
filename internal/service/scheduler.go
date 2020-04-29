@@ -18,8 +18,12 @@ import (
 
 const ErrorPrefix = "error during job scheduling"
 
+var (
+	jsonpathLanguage = gval.Full(jsonpath.PlaceholderExtension())
+)
+
 type JobScheduler struct {
-	jobService      domain.JobRepo
+	jobRepo         domain.JobRepo
 	orderRepo       domain.OrderRepo
 	readMappingRepo domain.ReadMappingRepo
 	client          *retryablehttp.Client
@@ -34,7 +38,7 @@ func NewJobScheduler(cfg config.SchedulerConfig, jobService domain.JobRepo, orde
 	client := retryablehttp.NewClient()
 	client.RetryMax = cfg.SendJobRetriesMax
 	return &JobScheduler{
-		jobService:      jobService,
+		jobRepo:         jobService,
 		orderRepo:       orderRepo,
 		readMappingRepo: readMappingRepo,
 		client:          client,
@@ -56,10 +60,7 @@ func (s JobScheduler) Start() {
 func (s JobScheduler) schedule() {
 	log.Traceln("start jobs scheduler")
 
-	// ctx, cancel := context.WithTimeout(context.Background(), rest.RepoTimeoutSec*time.Second)
-	// defer cancel()
-
-	jobs, err := s.jobService.GetReadyJobs(context.Background(), s.jobLimit)
+	jobs, err := s.jobRepo.GetReadyJobs(context.Background(), s.jobLimit)
 	if err != nil {
 		log.Errorf(ErrorPrefix+", can't get ready jobs: %v", err)
 		return
@@ -86,11 +87,6 @@ func (s JobScheduler) schedule() {
 				log.Errorf(ErrorPrefix+" (%s, %s, %s): %v", job.Action, taskId, orderId, err)
 				continue
 			}
-
-			/*if err = s.sendStartJobMessage(spanCtx, job.Action, msgBytes); err != nil {
-				log.Errorf(ErrorPrefix + " (%s, %s, %s): %v", job.Action, taskId, orderId, err)
-				continue
-			}*/
 			log.Debugf("start job completed (%s, %s)", taskId, orderId)
 		} else {
 			log.Debugf("start job skipped (%s, %s)", taskId, orderId)
@@ -109,7 +105,7 @@ func (s JobScheduler) buildStartJobMessage(ctx context.Context, job domain.Job, 
 	if err != nil {
 		return nil, errors.Wrapf(err, "can't get read mapping (%s)", mappingId)
 	}
-	body, err := s.buildStartJobBody(mapping, order.Body)
+	body, err := buildStartJobBody(ctx, mapping, order.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "can't build start job body")
 	}
@@ -124,14 +120,13 @@ func (s JobScheduler) buildStartJobMessage(ctx context.Context, job domain.Job, 
 	return msgBytes, nil
 }
 
-func (s JobScheduler) buildStartJobBody(mapping *domain.ReadMapping, orderBody domain.Body) (domain.Body, error) {
+func buildStartJobBody(ctx context.Context, mapping *domain.ReadMapping, orderBody domain.Body) (domain.Body, error) {
 	var result = make(domain.Body)
 	for key, value := range mapping.Body {
-		builder := gval.Full(jsonpath.PlaceholderExtension())
 		strValue := value.(string)
-		if tasksPath, err := builder.NewEvaluable(strValue); err != nil {
+		if tasksPath, err := jsonpathLanguage.NewEvaluable(strValue); err != nil {
 			return nil, errors.Wrapf(err, "can't create new evaluator (%s)", value)
-		} else if value, err := tasksPath(context.Background(), map[string]interface{}(orderBody)); err != nil {
+		} else if value, err := tasksPath(ctx, map[string]interface{}(orderBody)); err != nil {
 			return nil, errors.Wrapf(err, "can't evaluate value (%s)", strValue)
 		} else {
 			result[key] = value
