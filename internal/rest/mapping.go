@@ -3,15 +3,16 @@ package rest
 import (
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
 type MappingRestHandler struct {
-	processService domain.ProcessService
+	readMappingService domain.ReadMappingService
 }
 
-func NewMappingRestHandler(processService domain.ProcessService) *MappingRestHandler {
-	return &MappingRestHandler{processService: processService}
+func NewMappingRestHandler(readMappingService domain.ReadMappingService) *MappingRestHandler {
+	return &MappingRestHandler{readMappingService: readMappingService}
 }
 
 func (h MappingRestHandler) Register(router *gin.Engine) {
@@ -34,16 +35,17 @@ func (h MappingRestHandler) Register(router *gin.Engine) {
 // @Router /mapping/{id} [get]
 func (h MappingRestHandler) getReadMappingById(c *gin.Context) {
 	id := c.Param(ParamId)
-	result, err := h.processService.GetReadMappingById(c.Request.Context(), id)
+	result, err := h.readMappingService.GetById(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		if domain.ECode(err) == domain.ErrNotFound {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	if result != nil {
-		c.JSON(http.StatusOK, result)
-	} else {
-		c.Status(http.StatusNotFound)
-	}
+	c.JSON(http.StatusOK, result)
 }
 
 // GetReadMappingById godoc
@@ -56,9 +58,10 @@ func (h MappingRestHandler) getReadMappingById(c *gin.Context) {
 // @Failure 500 {object} domain.Error
 // @Router /mapping [get]
 func (h MappingRestHandler) getReadMappings(c *gin.Context) {
-	results, err := h.processService.GetReadMappings(c.Request.Context())
+	results, err := h.readMappingService.GetAll(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
 	c.JSON(http.StatusOK, results)
@@ -76,9 +79,14 @@ func (h MappingRestHandler) getReadMappings(c *gin.Context) {
 // @Router /mapping/{id} [delete]
 func (h MappingRestHandler) deleteReadMappingById(c *gin.Context) {
 	id := c.Param(ParamId)
-	err := h.processService.DeleteReadMappingById(c.Request.Context(), id)
+	err := h.readMappingService.DeleteById(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		if domain.ECode(err) == domain.ErrNotFound {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, E(err))
 	}
 }
 
@@ -95,12 +103,15 @@ func (h MappingRestHandler) deleteReadMappingById(c *gin.Context) {
 func (h MappingRestHandler) createReadMapping(c *gin.Context) {
 	var obj domain.ReadMapping
 	if err := c.BindJSON(&obj); err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	result, err := h.processService.CreateReadMapping(c.Request.Context(), &obj)
+	result, err := h.readMappingService.Create(c.Request.Context(), &obj)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
+		return
 	}
 	c.JSON(http.StatusOK, result)
 }

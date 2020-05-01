@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"example.com/oligzeev/pp-gin/internal/domain"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -16,71 +15,66 @@ const (
 	deleteReadMappingById = `DELETE FROM pp_read_mapping WHERE read_mapping_id = $1`
 )
 
-type ReadMappingEntity struct {
+type ReadMapping struct {
 	Id   string `db:"read_mapping_id"`
 	Body Body   `db:"body"`
 }
 
-func toReadMapping(obj *ReadMappingEntity) *domain.ReadMapping {
-	return &domain.ReadMapping{Id: obj.Id, Body: domain.Body(obj.Body)}
-}
-
-func toReadMappings(arr []ReadMappingEntity) []domain.ReadMapping {
-	result := make([]domain.ReadMapping, len(arr))
-	for i, obj := range arr {
-		result[i].Id = obj.Id
-		result[i].Body = domain.Body(obj.Body)
-	}
-	return result
-}
-
-// ReadMappingRepo via postgres database
-type DbReadMappingRepo struct {
+type ReadMappingRepo struct {
 	db *sqlx.DB
 }
 
-func NewDbReadMappingRepo(db *sqlx.DB) *DbReadMappingRepo {
-	return &DbReadMappingRepo{db: db}
+func NewReadMappingRepo(db *sqlx.DB) *ReadMappingRepo {
+	return &ReadMappingRepo{db: db}
 }
 
-// Get all read mappings
-func (s DbReadMappingRepo) GetAll(ctx context.Context) ([]domain.ReadMapping, error) {
-	var result []ReadMappingEntity
+func (s ReadMappingRepo) GetAll(ctx context.Context) ([]ReadMapping, error) {
+	const op = "ReadMappingRepo.GetAll"
+
+	var result []ReadMapping
 	if err := s.db.SelectContext(ctx, &result, getReadMappings); err != nil {
-		return nil, fmt.Errorf("can't get read mappings: %v", err)
+		return nil, domain.E(op, err)
 	}
-	return toReadMappings(result), nil
+	return result, nil
 }
 
-// Create read mapping
-func (s DbReadMappingRepo) Create(ctx context.Context, obj *domain.ReadMapping) (*domain.ReadMapping, error) {
+func (s ReadMappingRepo) Create(ctx context.Context, obj *ReadMapping) (*ReadMapping, error) {
+	const op = "ReadMappingRepo.Create"
+
 	id, err := uuid.NewUUID()
 	if err != nil {
-		return nil, fmt.Errorf("can't generate uuid: %v", err)
+		return nil, domain.E(op, "can't generate uuid", err)
 	}
 	obj.Id = id.String()
-	if _, err := s.db.ExecContext(ctx, createReadMapping, obj.Id, Body(obj.Body)); err != nil {
-		return nil, fmt.Errorf("can't create read mapping (%s): %v", obj.Id, err)
+
+	if _, err := s.db.ExecContext(ctx, createReadMapping, obj.Id, obj.Body); err != nil {
+		return nil, domain.E(op, err)
 	}
 	return obj, nil
 }
 
-// Get read mapping by Id
-func (s DbReadMappingRepo) GetById(ctx context.Context, id string) (*domain.ReadMapping, error) {
-	var result ReadMappingEntity
+func (s ReadMappingRepo) GetById(ctx context.Context, id string) (*ReadMapping, error) {
+	const op = "ReadMappingRepo.GetById"
+
+	var result ReadMapping
 	if err := s.db.GetContext(ctx, &result, getReadMappingById, id); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil
+			return nil, domain.E(op, domain.ErrNotFound)
 		}
-		return nil, fmt.Errorf("can't get read mapping (%s): %v", id, err)
+		return nil, domain.E(op, err)
 	}
-	return toReadMapping(&result), nil
+	return &result, nil
 }
 
-// Delete read mapping by Id
-func (s DbReadMappingRepo) DeleteById(ctx context.Context, id string) error {
-	if _, err := s.db.ExecContext(ctx, deleteReadMappingById, id); err != nil {
-		return fmt.Errorf("can't delete read mapping (%s): %v", id, err)
+func (s ReadMappingRepo) DeleteById(ctx context.Context, id string) error {
+	const op = "ReadMappingRepo.DeleteById"
+
+	result, err := s.db.ExecContext(ctx, deleteReadMappingById, id)
+	if err != nil {
+		return domain.E(op, err)
+	}
+	if count, _ := result.RowsAffected(); count == 0 {
+		return domain.E(op, domain.ErrNotFound)
 	}
 	return nil
 }

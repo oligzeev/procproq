@@ -7,53 +7,128 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type ProcessService struct {
-	db              *sqlx.DB
-	processRepo     domain.ProcessRepo
-	readMappingRepo domain.ReadMappingRepo
-}
-
-func NewProcessService(db *sqlx.DB, processRepo domain.ProcessRepo, readMappingRepo domain.ReadMappingRepo) *ProcessService {
-	return &ProcessService{db: db, processRepo: processRepo, readMappingRepo: readMappingRepo}
-}
-
-func (s ProcessService) GetProcesses(ctx context.Context) ([]domain.Process, error) {
-	return s.processRepo.GetAll(ctx)
-}
-
-func (s ProcessService) CreateProcess(ctx context.Context, process *domain.Process) (*domain.Process, error) {
-	result, err := database.ExecTx(ctx, s.db, func(txCtx context.Context) (interface{}, error) {
-		return s.processRepo.Create(txCtx, process)
-	})
-	if result == nil {
-		return nil, err
+func toProcesses(arr []database.Process) []domain.Process {
+	result := make([]domain.Process, len(arr))
+	for i, obj := range arr {
+		result[i].Id = obj.Id
+		result[i].Name = obj.Name
+		result[i].Tasks = toTasks(obj.Tasks)
+		result[i].TaskRelations = toTaskRelations(obj.TaskRelations)
 	}
-	return result.(*domain.Process), err
+	return result
 }
 
-func (s ProcessService) GetProcessById(ctx context.Context, id string) (*domain.Process, error) {
-	return s.processRepo.GetById(ctx, id)
+func toProcess(obj *database.Process) *domain.Process {
+	return &domain.Process{
+		Id:            obj.Id,
+		Name:          obj.Name,
+		Tasks:         toTasks(obj.Tasks),
+		TaskRelations: toTaskRelations(obj.TaskRelations),
+	}
 }
 
-func (s ProcessService) DeleteProcessById(ctx context.Context, id string) error {
-	_, err := database.ExecTx(ctx, s.db, func(txCtx context.Context) (interface{}, error) {
-		return nil, s.processRepo.DeleteById(txCtx, id)
+func fromProcess(obj *domain.Process) *database.Process {
+	return &database.Process{
+		Id:            obj.Id,
+		Name:          obj.Name,
+		Tasks:         fromTasks(obj.Id, obj.Tasks),
+		TaskRelations: fromTaskRelations(obj.Id, obj.TaskRelations),
+	}
+}
+
+func toTasks(arr []database.Task) []domain.Task {
+	result := make([]domain.Task, len(arr))
+	for i, obj := range arr {
+		result[i].Id = obj.Id
+		result[i].Name = obj.Name
+		result[i].Category = obj.Category
+		result[i].Action = obj.Action
+		result[i].ReadMappingId = obj.ReadMappingId
+	}
+	return result
+}
+
+func fromTasks(processId string, arr []domain.Task) []database.Task {
+	result := make([]database.Task, len(arr))
+	for i, obj := range arr {
+		result[i].ProcessId = processId
+		result[i].Id = obj.Id
+		result[i].Name = obj.Name
+		result[i].Category = obj.Category
+		result[i].Action = obj.Action
+		result[i].ReadMappingId = obj.ReadMappingId
+	}
+	return result
+}
+
+func toTaskRelations(arr []database.TaskRelation) []domain.TaskRelation {
+	result := make([]domain.TaskRelation, len(arr))
+	for i, obj := range arr {
+		result[i].ParentId = obj.ParentId
+		result[i].ChildId = obj.ChildId
+	}
+	return result
+}
+
+func fromTaskRelations(processId string, arr []domain.TaskRelation) []database.TaskRelation {
+	result := make([]database.TaskRelation, len(arr))
+	for i, obj := range arr {
+		result[i].ProcessId = processId
+		result[i].ParentId = obj.ParentId
+		result[i].ChildId = obj.ChildId
+	}
+	return result
+}
+
+type ProcessService struct {
+	db   *sqlx.DB
+	repo *database.ProcessRepo
+}
+
+func NewProcessService(db *sqlx.DB, processRepo *database.ProcessRepo) *ProcessService {
+	return &ProcessService{db: db, repo: processRepo}
+}
+
+func (s ProcessService) GetAll(ctx context.Context) ([]domain.Process, error) {
+	const op = "ProcessService.GetAll"
+
+	result, err := s.repo.GetAll(ctx)
+	if err != nil {
+		return nil, domain.E(op, err)
+	}
+	return toProcesses(result), nil
+}
+
+func (s ProcessService) Create(ctx context.Context, process *domain.Process) (*domain.Process, error) {
+	const op = "ProcessService.Create"
+
+	result, err := database.ExecTx(ctx, s.db, func(txCtx context.Context) (interface{}, error) {
+		return s.repo.Create(txCtx, fromProcess(process))
 	})
-	return err
+	if err != nil {
+		return nil, domain.E(op, err)
+	}
+	return toProcess(result.(*database.Process)), nil
 }
 
-func (s ProcessService) GetReadMappings(ctx context.Context) ([]domain.ReadMapping, error) {
-	return s.readMappingRepo.GetAll(ctx)
+func (s ProcessService) GetById(ctx context.Context, id string) (*domain.Process, error) {
+	const op = "ProcessService.GetById"
+
+	result, err := s.repo.GetById(ctx, id)
+	if err != nil {
+		return nil, domain.E(op, err)
+	}
+	return toProcess(result), err
 }
 
-func (s ProcessService) CreateReadMapping(ctx context.Context, mapping *domain.ReadMapping) (*domain.ReadMapping, error) {
-	return s.readMappingRepo.Create(ctx, mapping)
-}
+func (s ProcessService) DeleteById(ctx context.Context, id string) error {
+	const op = "ProcessService.DeleteById"
 
-func (s ProcessService) GetReadMappingById(ctx context.Context, id string) (*domain.ReadMapping, error) {
-	return s.readMappingRepo.GetById(ctx, id)
-}
-
-func (s ProcessService) DeleteReadMappingById(ctx context.Context, id string) error {
-	return s.readMappingRepo.DeleteById(ctx, id)
+	_, err := database.ExecTx(ctx, s.db, func(txCtx context.Context) (interface{}, error) {
+		return nil, s.repo.DeleteById(txCtx, id)
+	})
+	if err != nil {
+		return domain.E(op, err)
+	}
+	return nil
 }

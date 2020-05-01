@@ -7,10 +7,6 @@ const (
 	ContentTypeApplicationJson = "application/json"
 )
 
-type Error struct {
-	Error string `json:"message"`
-}
-
 type RestHandler interface {
 	Register(router *gin.Engine)
 }

@@ -2,10 +2,10 @@ package main
 
 import (
 	"example.com/oligzeev/pp-gin/internal/cache"
-	"example.com/oligzeev/pp-gin/internal/config"
+	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/database"
 	"example.com/oligzeev/pp-gin/internal/domain"
-	"example.com/oligzeev/pp-gin/internal/metrics"
+	"example.com/oligzeev/pp-gin/internal/metric"
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/service"
 	"example.com/oligzeev/pp-gin/internal/tracing"
@@ -37,18 +37,19 @@ func main() {
 	_, closer := initTracing(cfg.Tracing)
 	defer closer.Close()
 
-	readMappingRepo := NewReadMappingRepo(cfg.Cache, db)
-	processRepo := NewProcessRepo(cfg.Cache, db)
-	jobRepo := NewJobRepo(db)
-	orderRepo := NewOrderRepo(cfg.Cache, db)
+	readMappingRepo := database.NewReadMappingRepo(db)
+	processRepo := database.NewProcessRepo(db)
+	jobRepo := database.NewJobRepo(db)
+	orderRepo := database.NewOrderRepo(db)
 
-	processService := service.NewProcessService(db, processRepo, readMappingRepo)
-	orderService := service.NewOrderService(db, processRepo, orderRepo, jobRepo)
+	readMappingService := NewReadMappingService(cfg.Cache, readMappingRepo)
+	processService := NewProcessService(cfg.Cache, db, processRepo)
+	orderService := NewOrderService(cfg.Cache, db, processService, orderRepo, jobRepo)
 
-	initScheduler(cfg.Scheduler, jobRepo, orderRepo, readMappingRepo)
+	initScheduler(cfg.Scheduler, jobRepo, orderService, readMappingService)
 
 	router := initRouter(cfg.Rest, []domain.RestHandler{
-		rest.NewMappingRestHandler(processService),
+		rest.NewMappingRestHandler(readMappingService),
 		rest.NewProcessRestHandler(processService),
 		rest.NewJobRestHandler(orderService),
 		rest.NewOrderRestHandler(orderService),
@@ -60,28 +61,28 @@ func main() {
 // *** Initialize components ***
 // *****************************
 
-func initScheduler(cfg config.SchedulerConfig, jobRepo domain.JobRepo, orderRepo domain.OrderRepo,
-	readMappingRepo domain.ReadMappingRepo) {
+func initScheduler(cfg config2.SchedulerConfig, jobRepo *database.JobRepo, orderService domain.OrderService,
+	readMappingService domain.ReadMappingService) {
 	if cfg.Enabled {
-		scheduler := service.NewJobScheduler(cfg, jobRepo, orderRepo, readMappingRepo)
+		scheduler := service.NewJobScheduler(cfg, jobRepo, orderService, readMappingService)
 		scheduler.Start()
 	}
 }
 
-func initConfig(yamlFileName, envPrefix string) *config.ApplicationConfig {
-	appConfig, err := config.ReadConfig(yamlFileName, envPrefix)
+func initConfig(yamlFileName, envPrefix string) *config2.ApplicationConfig {
+	appConfig, err := config2.ReadConfig(yamlFileName, envPrefix)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return appConfig
 }
 
-func initLogger(cfg config.LoggingConfig) {
+func initLogger(cfg config2.LoggingConfig) {
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.SetLevel(log.Level(cfg.Level))
 }
 
-func initTracing(cfg config.TracingConfig) (opentracing.Tracer, io.Closer) {
+func initTracing(cfg config2.TracingConfig) (opentracing.Tracer, io.Closer) {
 	tracingCfg := jaegerconf.Configuration{
 		ServiceName: cfg.ServiceName,
 		Sampler: &jaegerconf.SamplerConfig{
@@ -100,7 +101,7 @@ func initTracing(cfg config.TracingConfig) (opentracing.Tracer, io.Closer) {
 	return tracer, closer
 }
 
-func initDatabase(cfg config.DbConfig) *sqlx.DB {
+func initDatabase(cfg config2.DbConfig) *sqlx.DB {
 	db, err := database.DbConnect(cfg)
 	if err != nil {
 		log.Fatal(err)
@@ -108,7 +109,7 @@ func initDatabase(cfg config.DbConfig) *sqlx.DB {
 	return db
 }
 
-func initRouter(cfg config.RestConfig, handlers []domain.RestHandler) *gin.Engine {
+func initRouter(cfg config2.RestConfig, handlers []domain.RestHandler) *gin.Engine {
 	router := gin.Default()
 
 	// Jaeger middleware initialization
@@ -120,7 +121,7 @@ func initRouter(cfg config.RestConfig, handlers []domain.RestHandler) *gin.Engin
 
 	// Prometheus handler initialization
 	// prom := ginprom.NewPrometheus("gin") and prom.Use(router)
-	router.GET(cfg.MetricsUrl, metrics.PrometheusHandler())
+	router.GET(cfg.MetricsUrl, metric.PrometheusHandler())
 
 	// PProf handler initialization
 	// https://github.com/gin-contrib/pprof
@@ -133,7 +134,7 @@ func initRouter(cfg config.RestConfig, handlers []domain.RestHandler) *gin.Engin
 	return router
 }
 
-func initServer(cfg config.RestConfig, r *gin.Engine) {
+func initServer(cfg config2.RestConfig, r *gin.Engine) {
 	if err := endless.ListenAndServe(cfg.Host+":"+strconv.Itoa(cfg.Port), r); err != nil {
 		log.Fatal(err)
 	}
@@ -143,30 +144,29 @@ func initServer(cfg config.RestConfig, r *gin.Engine) {
 // *** Create repositories ***
 // ***************************
 
-func NewReadMappingRepo(cfg config.CacheConfig, db *sqlx.DB) domain.ReadMappingRepo {
-	repo, err := cache.NewCachedReadMappingRepo(cfg.DefaultEntityCount, database.NewDbReadMappingRepo(db))
+func NewReadMappingService(cfg config2.CacheConfig, repo *database.ReadMappingRepo) domain.ReadMappingService {
+	service, err := cache.NewCachedReadMappingService(cfg.DefaultEntityCount, service.NewReadMappingService(repo))
 	if err != nil {
 		log.Fatal(err)
 	}
-	return tracing.NewSpanReadMappingRepo(repo)
+	return tracing.NewSpanReadMappingService(service)
 }
 
-func NewProcessRepo(cfg config.CacheConfig, db *sqlx.DB) domain.ProcessRepo {
-	repo, err := cache.NewCachedProcessRepo(cfg.DefaultEntityCount, database.NewDbProcessRepo(db))
+func NewProcessService(cfg config2.CacheConfig, db *sqlx.DB, repo *database.ProcessRepo) domain.ProcessService {
+	service, err := cache.NewCachedProcessRepo(cfg.DefaultEntityCount, service.NewProcessService(db, repo))
 	if err != nil {
 		log.Fatal(err)
 	}
-	return tracing.NewSpanProcessRepo(repo)
+	return tracing.NewSpanProcessService(service)
 }
 
-func NewJobRepo(db *sqlx.DB) domain.JobRepo {
-	return tracing.NewSpanJobRepo(database.NewDbJobRepo(db))
-}
+func NewOrderService(cfg config2.CacheConfig, db *sqlx.DB, processService domain.ProcessService,
+	orderRepo *database.OrderRepo, jobRepo *database.JobRepo) domain.OrderService {
 
-func NewOrderRepo(cfg config.CacheConfig, db *sqlx.DB) domain.OrderRepo {
-	repo, err := cache.NewCachedOrderRepo(cfg.DefaultEntityCount, database.NewDbOrderRepo(db))
+	service := service.NewOrderService(db, processService, orderRepo, jobRepo)
+	cached, err := cache.NewCachedOrderService(cfg.DefaultEntityCount, service)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return tracing.NewSpanOrderRepo(repo)
+	return tracing.NewSpanOrderService(cached)
 }

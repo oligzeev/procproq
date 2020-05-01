@@ -6,34 +6,38 @@ import (
 	"github.com/opentracing/opentracing-go"
 )
 
-type SpanReadMappingRepo struct {
-	repo domain.ReadMappingRepo
+type SpanReadMappingService struct {
+	service domain.ReadMappingService
 }
 
-func NewSpanReadMappingRepo(repo domain.ReadMappingRepo) *SpanReadMappingRepo {
-	return &SpanReadMappingRepo{repo: repo}
+func NewSpanReadMappingService(service domain.ReadMappingService) *SpanReadMappingService {
+	return &SpanReadMappingService{service: service}
 }
 
-func (s SpanReadMappingRepo) GetAll(ctx context.Context) ([]domain.ReadMapping, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "ReadMappingRepo.GetAll")
+func (s SpanReadMappingService) GetAll(ctx context.Context) ([]domain.ReadMapping, error) {
+	const op = "ReadMappingService.GetAll"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.GetAll(spanCtx)
+	return s.service.GetAll(spanCtx)
 }
 
-func (s SpanReadMappingRepo) Create(ctx context.Context, obj *domain.ReadMapping) (*domain.ReadMapping, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "ReadMappingRepo.Create")
+func (s SpanReadMappingService) Create(ctx context.Context, obj *domain.ReadMapping) (*domain.ReadMapping, error) {
+	const op = "ReadMappingService.Create"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.Create(spanCtx, obj)
+	return s.service.Create(spanCtx, obj)
 }
 
-func (s SpanReadMappingRepo) GetById(ctx context.Context, id string) (*domain.ReadMapping, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "ReadMappingRepo.GetById")
+func (s SpanReadMappingService) GetById(ctx context.Context, id string) (*domain.ReadMapping, error) {
+	const op = "ReadMappingService.GetById"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.GetById(spanCtx, id)
+	return s.service.GetById(spanCtx, id)
 }
 
-func (s SpanReadMappingRepo) DeleteById(ctx context.Context, id string) error {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "ReadMappingRepo.DeleteById")
+func (s SpanReadMappingService) DeleteById(ctx context.Context, id string) error {
+	const op = "ReadMappingService.DeleteById"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.DeleteById(spanCtx, id)
+	return s.service.DeleteById(spanCtx, id)
 }

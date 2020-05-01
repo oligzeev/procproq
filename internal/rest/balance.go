@@ -20,7 +20,7 @@ func BalanceMiddleware(requestUrl string, retryMax int) gin.HandlerFunc {
 		// Prepare http (with retries) request
 		request, err := retryablehttp.NewRequest(c.Request.Method, requestUrl+c.Request.RequestURI, c.Request.Body)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, NewError(err))
+			c.JSON(http.StatusInternalServerError, E(err))
 			return
 		}
 		request.WithContext(spanCtx)
@@ -31,14 +31,14 @@ func BalanceMiddleware(requestUrl string, retryMax int) gin.HandlerFunc {
 
 		// Propagate tracing
 		if err := tracer.Inject(span.Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(request.Header)); err != nil {
-			c.JSON(http.StatusInternalServerError, NewError(err))
+			c.JSON(http.StatusInternalServerError, E(err))
 			return
 		}
 
 		// Perform request
 		response, err := client.Do(request)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, NewError(err))
+			c.JSON(http.StatusInternalServerError, E(err))
 			return
 		}
 

@@ -3,48 +3,47 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"example.com/oligzeev/pp-gin/internal/config"
+	config2 "example.com/oligzeev/pp-gin/internal/config"
+	"example.com/oligzeev/pp-gin/internal/database"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/tracing"
+	"fmt"
 	"github.com/PaesslerAG/gval"
 	"github.com/PaesslerAG/jsonpath"
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
 )
-
-const ErrorPrefix = "error during job scheduling"
 
 var (
 	jsonpathLanguage = gval.Full(jsonpath.PlaceholderExtension())
 )
 
 type JobScheduler struct {
-	jobRepo         domain.JobRepo
-	orderRepo       domain.OrderRepo
-	readMappingRepo domain.ReadMappingRepo
-	client          *retryablehttp.Client
-	period          time.Duration
-	sendJobTimeout  time.Duration
-	jobLimit        int
+	jobRepo            *database.JobRepo
+	orderService       domain.OrderService
+	readMappingService domain.ReadMappingService
+	client             *retryablehttp.Client
+	period             time.Duration
+	sendJobTimeout     time.Duration
+	jobLimit           int
 }
 
-func NewJobScheduler(cfg config.SchedulerConfig, jobService domain.JobRepo, orderRepo domain.OrderRepo,
-	readMappingRepo domain.ReadMappingRepo) *JobScheduler {
+func NewJobScheduler(cfg config2.SchedulerConfig, jobService *database.JobRepo, orderService domain.OrderService,
+	readMappingRepo domain.ReadMappingService) *JobScheduler {
 
 	client := retryablehttp.NewClient()
 	client.RetryMax = cfg.SendJobRetriesMax
 	return &JobScheduler{
-		jobRepo:         jobService,
-		orderRepo:       orderRepo,
-		readMappingRepo: readMappingRepo,
-		client:          client,
-		period:          time.Duration(cfg.PeriodSec),
-		sendJobTimeout:  time.Duration(cfg.SendJobTimeoutSec),
-		jobLimit:        cfg.JobLimit,
+		jobRepo:            jobService,
+		orderService:       orderService,
+		readMappingService: readMappingRepo,
+		client:             client,
+		period:             time.Duration(cfg.PeriodSec),
+		sendJobTimeout:     time.Duration(cfg.SendJobTimeoutSec),
+		jobLimit:           cfg.JobLimit,
 	}
 }
 
@@ -58,20 +57,20 @@ func (s JobScheduler) Start() {
 }
 
 func (s JobScheduler) schedule() {
-	log.Traceln("start jobs scheduler")
+	const op = "JobScheduler.Schedule"
 
+	log.Trace(op + ": schedule")
 	jobs, err := s.jobRepo.GetReadyJobs(context.Background(), s.jobLimit)
 	if err != nil {
-		log.Errorf(ErrorPrefix+", can't get ready jobs: %v", err)
+		log.Error(domain.E(op, "can't get ready jobs", err))
 		return
 	}
-
-	log.Tracef("start jobs execution: %v", len(jobs))
+	log.Tracef(op+": jobs execution: %v", len(jobs))
 	for _, job := range jobs {
 		span, spanCtx, err := tracing.StartContextFromSpanStr(context.Background(), "Scheduler start job", job.Trace)
 		if err != nil {
 			spanCtx = context.Background()
-			log.Errorf("can't extract span context from job: %v", err)
+			log.Warn(domain.E(op, "can't extract span context from job, skip span context", err))
 		}
 		orderId := job.OrderId
 		taskId := job.TaskId
@@ -79,35 +78,38 @@ func (s JobScheduler) schedule() {
 
 		msgBytes, err := s.buildStartJobMessage(spanCtx, job, orderId, mappingId)
 		if err != nil {
-			log.Errorf(ErrorPrefix+", can't build start job message (%s, %s): %v", taskId, orderId, err)
+			log.Error(domain.E(op, fmt.Sprintf("can't build start job message (%s, %s)", taskId, orderId), err))
 			continue
 		}
 		if job.Category == domain.HttpTaskCategory {
 			if _, err := rest.Send(spanCtx, s.client, job.Action, http.MethodPost, msgBytes); err != nil {
-				log.Errorf(ErrorPrefix+" (%s, %s, %s): %v", job.Action, taskId, orderId, err)
+				log.Error(domain.E(op, fmt.Sprintf("can't send start job message (%s, %s, %s)", job.Action,
+					taskId, orderId), err))
 				continue
 			}
-			log.Debugf("start job completed (%s, %s)", taskId, orderId)
+			log.Tracef(op+": start job completed (%s, %s)", taskId, orderId)
 		} else {
-			log.Debugf("start job skipped (%s, %s)", taskId, orderId)
+			log.Tracef(op+": start job skipped (%s, %s)", taskId, orderId)
 		}
 		span.Finish()
 	}
-	log.Tracef("complete jobs execution: %v", len(jobs))
+	log.Tracef(op+": complete: %v", len(jobs))
 }
 
-func (s JobScheduler) buildStartJobMessage(ctx context.Context, job domain.Job, orderId, mappingId string) ([]byte, error) {
-	order, err := s.orderRepo.GetById(ctx, orderId)
+func (s JobScheduler) buildStartJobMessage(ctx context.Context, job database.Job, orderId, mappingId string) ([]byte, error) {
+	const op = "JobScheduler.BuildStartJobMessage"
+
+	order, err := s.orderService.GetOrderById(ctx, orderId)
 	if err != nil {
-		return nil, errors.Wrapf(err, "can't get order (%s)", orderId)
+		return nil, domain.E(op, fmt.Sprintf("can't get order (%s)", orderId), err)
 	}
-	mapping, err := s.readMappingRepo.GetById(ctx, mappingId)
+	mapping, err := s.readMappingService.GetById(ctx, mappingId)
 	if err != nil {
-		return nil, errors.Wrapf(err, "can't get read mapping (%s)", mappingId)
+		return nil, domain.E(op, fmt.Sprintf("can't get read mapping (%s)", mappingId), err)
 	}
 	body, err := buildStartJobBody(ctx, mapping, order.Body)
 	if err != nil {
-		return nil, errors.Wrap(err, "can't build start job body")
+		return nil, domain.E(op, "can't build job body", err)
 	}
 	msgBytes, err := json.Marshal(&domain.JobStartMessage{
 		TaskId:  job.TaskId,
@@ -115,22 +117,26 @@ func (s JobScheduler) buildStartJobMessage(ctx context.Context, job domain.Job, 
 		Body:    body,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "can't marshal message")
+		return nil, domain.E(op, "can't marshal message", err)
 	}
 	return msgBytes, nil
 }
 
 func buildStartJobBody(ctx context.Context, mapping *domain.ReadMapping, orderBody domain.Body) (domain.Body, error) {
+	const op = "JobScheduler.BuildStartJobBody"
+
 	var result = make(domain.Body)
 	for key, value := range mapping.Body {
 		strValue := value.(string)
-		if tasksPath, err := jsonpathLanguage.NewEvaluable(strValue); err != nil {
-			return nil, errors.Wrapf(err, "can't create new evaluator (%s)", value)
-		} else if value, err := tasksPath(ctx, map[string]interface{}(orderBody)); err != nil {
-			return nil, errors.Wrapf(err, "can't evaluate value (%s)", strValue)
-		} else {
-			result[key] = value
+		tasksPath, err := jsonpathLanguage.NewEvaluable(strValue)
+		if err != nil {
+			return nil, domain.E(op, fmt.Sprintf("can't create new evaluator (%s)", value), err)
 		}
+		value, err := tasksPath(ctx, map[string]interface{}(orderBody))
+		if err != nil {
+			return nil, domain.E(op, fmt.Sprintf("can't evaluate value (%s)", value), err)
+		}
+		result[key] = value
 	}
 	return result, nil
 }

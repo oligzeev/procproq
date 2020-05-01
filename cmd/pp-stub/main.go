@@ -1,9 +1,9 @@
 package main
 
 import (
-	"example.com/oligzeev/pp-gin/internal/config"
+	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/domain"
-	"example.com/oligzeev/pp-gin/internal/metrics"
+	"example.com/oligzeev/pp-gin/internal/metric"
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"github.com/fvbock/endless"
@@ -33,20 +33,20 @@ func main() {
 // *** Initialize components ***
 // *****************************
 
-func initConfig(yamlFileName, envPrefix string) *config.ApplicationConfig {
-	appConfig, err := config.ReadConfig(yamlFileName, envPrefix)
+func initConfig(yamlFileName, envPrefix string) *config2.ApplicationConfig {
+	appConfig, err := config2.ReadConfig(yamlFileName, envPrefix)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return appConfig
 }
 
-func initLogger(cfg config.LoggingConfig) {
+func initLogger(cfg config2.LoggingConfig) {
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.SetLevel(log.Level(cfg.Level))
 }
 
-func initTracing(cfg config.TracingConfig) (opentracing.Tracer, io.Closer) {
+func initTracing(cfg config2.TracingConfig) (opentracing.Tracer, io.Closer) {
 	tracingCfg := jaegerconf.Configuration{
 		ServiceName: cfg.ServiceName,
 		Sampler: &jaegerconf.SamplerConfig{
@@ -65,14 +65,14 @@ func initTracing(cfg config.TracingConfig) (opentracing.Tracer, io.Closer) {
 	return tracer, closer
 }
 
-func initRouter(cfg config.RestConfig, handlers []domain.RestHandler) *gin.Engine {
+func initRouter(cfg config2.RestConfig, handlers []domain.RestHandler) *gin.Engine {
 	router := gin.Default()
 
 	// Jaeger middleware initialization
 	router.Use(tracing.Middleware())
 
 	// Prometheus handler initialization
-	router.GET(cfg.MetricsUrl, metrics.PrometheusHandler())
+	router.GET(cfg.MetricsUrl, metric.PrometheusHandler())
 
 	for _, handler := range handlers {
 		handler.Register(router)
@@ -80,7 +80,7 @@ func initRouter(cfg config.RestConfig, handlers []domain.RestHandler) *gin.Engin
 	return router
 }
 
-func initServer(cfg config.RestConfig, r *gin.Engine) {
+func initServer(cfg config2.RestConfig, r *gin.Engine) {
 	if err := endless.ListenAndServe(cfg.Host+":"+strconv.Itoa(cfg.Port), r); err != nil {
 		log.Fatal(err)
 	}

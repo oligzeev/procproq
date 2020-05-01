@@ -3,6 +3,7 @@ package rest
 import (
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -35,14 +36,15 @@ func (h OrderRestHandler) getOrderById(c *gin.Context) {
 	id := c.Param(ParamId)
 	result, err := h.orderService.GetOrderById(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		if domain.ECode(err) == domain.ErrNotFound {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	if result != nil {
-		c.JSON(http.StatusOK, result)
-	} else {
-		c.Status(http.StatusNotFound)
-	}
+	c.JSON(http.StatusOK, result)
 }
 
 // GetOrderById godoc
@@ -57,7 +59,8 @@ func (h OrderRestHandler) getOrderById(c *gin.Context) {
 func (h OrderRestHandler) getOrders(c *gin.Context) {
 	results, err := h.orderService.GetOrders(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
 	c.JSON(http.StatusOK, results)
@@ -78,12 +81,14 @@ func (h OrderRestHandler) submitOrder(c *gin.Context) {
 	processId := c.Param(ParamProcessId)
 	var obj domain.Order
 	if err := c.BindJSON(&obj); err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
 	result, err := h.orderService.SubmitOrder(c.Request.Context(), &obj, processId)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
 	c.JSON(http.StatusOK, result)

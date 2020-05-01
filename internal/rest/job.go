@@ -3,6 +3,7 @@ package rest
 import (
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -32,10 +33,12 @@ func (h JobRestHandler) Register(router *gin.Engine) {
 func (h JobRestHandler) completeJob(c *gin.Context) {
 	var obj domain.JobCompleteMessage
 	if err := c.BindJSON(&obj); err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
 	if err := h.orderService.CompleteJob(c.Request.Context(), obj.TaskId, obj.OrderId); err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 	}
 }

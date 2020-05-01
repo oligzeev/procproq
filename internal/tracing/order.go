@@ -6,34 +6,38 @@ import (
 	"github.com/opentracing/opentracing-go"
 )
 
-type SpanOrderRepo struct {
-	repo domain.OrderRepo
+type SpanOrderService struct {
+	service domain.OrderService
 }
 
-func NewSpanOrderRepo(repo domain.OrderRepo) *SpanOrderRepo {
-	return &SpanOrderRepo{repo: repo}
+func NewSpanOrderService(service domain.OrderService) *SpanOrderService {
+	return &SpanOrderService{service: service}
 }
 
-func (s SpanOrderRepo) GetAll(ctx context.Context) ([]domain.Order, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "OrderRepo.GetAll")
+func (s SpanOrderService) SubmitOrder(ctx context.Context, order *domain.Order, processId string) (*domain.Order, error) {
+	const op = "OrderService.SubmitOrder"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.GetAll(spanCtx)
+	return s.service.SubmitOrder(spanCtx, order, processId)
 }
 
-func (s SpanOrderRepo) Create(ctx context.Context, obj *domain.Order) (*domain.Order, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "OrderRepo.Create")
+func (s SpanOrderService) GetOrders(ctx context.Context) ([]domain.Order, error) {
+	const op = "OrderService.GetOrders"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.Create(spanCtx, obj)
+	return s.service.GetOrders(spanCtx)
 }
 
-func (s SpanOrderRepo) GetById(ctx context.Context, id string) (*domain.Order, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "OrderRepo.GetById")
+func (s SpanOrderService) GetOrderById(ctx context.Context, id string) (*domain.Order, error) {
+	const op = "OrderService.GetOrderById"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.GetById(spanCtx, id)
+	return s.service.GetOrderById(spanCtx, id)
 }
 
-func (s SpanOrderRepo) DeleteById(ctx context.Context, id string) error {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "OrderRepo.DeleteById")
+func (s SpanOrderService) CompleteJob(ctx context.Context, taskId, orderId string) error {
+	const op = "OrderService.CompleteJob"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.DeleteById(spanCtx, id)
+	return s.service.CompleteJob(spanCtx, taskId, orderId)
 }

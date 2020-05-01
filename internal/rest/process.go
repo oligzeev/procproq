@@ -3,6 +3,7 @@ package rest
 import (
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -34,16 +35,17 @@ func (h ProcessRestHandler) Register(router *gin.Engine) {
 // @Router /process/{id} [get]
 func (h ProcessRestHandler) getProcessById(c *gin.Context) {
 	id := c.Param(ParamId)
-	result, err := h.processService.GetProcessById(c.Request.Context(), id)
+	result, err := h.processService.GetById(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		if domain.ECode(err) == domain.ErrNotFound {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	if result != nil {
-		c.JSON(http.StatusOK, result)
-	} else {
-		c.Status(http.StatusNotFound)
-	}
+	c.JSON(http.StatusOK, result)
 }
 
 // GetProcesses godoc
@@ -56,9 +58,10 @@ func (h ProcessRestHandler) getProcessById(c *gin.Context) {
 // @Failure 500 {object} domain.Error
 // @Router /process [get]
 func (h ProcessRestHandler) getProcesses(c *gin.Context) {
-	results, err := h.processService.GetProcesses(c.Request.Context())
+	results, err := h.processService.GetAll(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
 	c.JSON(http.StatusOK, results)
@@ -76,9 +79,14 @@ func (h ProcessRestHandler) getProcesses(c *gin.Context) {
 // @Router /process/{id} [delete]
 func (h ProcessRestHandler) deleteProcessById(c *gin.Context) {
 	id := c.Param(ParamId)
-	err := h.processService.DeleteProcessById(c.Request.Context(), id)
+	err := h.processService.DeleteById(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		if domain.ECode(err) == domain.ErrNotFound {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, E(err))
 	}
 }
 
@@ -95,12 +103,14 @@ func (h ProcessRestHandler) deleteProcessById(c *gin.Context) {
 func (h ProcessRestHandler) createProcess(c *gin.Context) {
 	var obj domain.Process
 	if err := c.BindJSON(&obj); err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	result, err := h.processService.CreateProcess(c.Request.Context(), &obj)
+	result, err := h.processService.Create(c.Request.Context(), &obj)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		log.Error(err)
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
 	c.JSON(http.StatusOK, result)

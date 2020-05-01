@@ -7,7 +7,7 @@ type ReadMapping struct {
 	Body Body   `json:"body"`
 }
 
-type ReadMappingRepo interface {
+type ReadMappingService interface {
 	GetAll(ctx context.Context) ([]ReadMapping, error)
 	Create(ctx context.Context, order *ReadMapping) (*ReadMapping, error)
 	GetById(ctx context.Context, id string) (*ReadMapping, error)

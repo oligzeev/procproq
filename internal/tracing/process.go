@@ -6,34 +6,38 @@ import (
 	"github.com/opentracing/opentracing-go"
 )
 
-type SpanProcessRepo struct {
-	repo domain.ProcessRepo
+type SpanProcessService struct {
+	service domain.ProcessService
 }
 
-func NewSpanProcessRepo(repo domain.ProcessRepo) *SpanProcessRepo {
-	return &SpanProcessRepo{repo: repo}
+func NewSpanProcessService(service domain.ProcessService) *SpanProcessService {
+	return &SpanProcessService{service: service}
 }
 
-func (s SpanProcessRepo) GetAll(ctx context.Context) ([]domain.Process, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "ProcessRepo.GetAll")
+func (s SpanProcessService) GetAll(ctx context.Context) ([]domain.Process, error) {
+	const op = "ProcessService.GetAll"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.GetAll(spanCtx)
+	return s.service.GetAll(spanCtx)
 }
 
-func (s SpanProcessRepo) Create(ctx context.Context, obj *domain.Process) (*domain.Process, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "ProcessRepo.Create")
+func (s SpanProcessService) Create(ctx context.Context, obj *domain.Process) (*domain.Process, error) {
+	const op = "ProcessService.Create"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.Create(spanCtx, obj)
+	return s.service.Create(spanCtx, obj)
 }
 
-func (s SpanProcessRepo) GetById(ctx context.Context, id string) (*domain.Process, error) {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "ProcessRepo.GetById")
+func (s SpanProcessService) GetById(ctx context.Context, id string) (*domain.Process, error) {
+	const op = "ProcessService.GetById"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.GetById(spanCtx, id)
+	return s.service.GetById(spanCtx, id)
 }
 
-func (s SpanProcessRepo) DeleteById(ctx context.Context, id string) error {
-	span, spanCtx := opentracing.StartSpanFromContext(ctx, "ProcessRepo.DeleteById")
+func (s SpanProcessService) DeleteById(ctx context.Context, id string) error {
+	const op = "ProcessService.DeleteById"
+	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.repo.DeleteById(spanCtx, id)
+	return s.service.DeleteById(spanCtx, id)
 }

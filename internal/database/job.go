@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"errors"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"fmt"
@@ -25,19 +24,30 @@ WHERE t.completed = FALSE AND t.task_id IN (
 ) AND order_id = $2`
 )
 
-type DbJobRepo struct {
+type Job struct {
+	TaskId        string `db:"task_id"`
+	Category      int    `db:"category"`
+	Action        string `db:"action"`
+	OrderId       string `db:"order_id"`
+	ReadMappingId string `db:"read_mapping_id"`
+	Trace         string `db:"trace"`
+}
+
+type JobRepo struct {
 	db *sqlx.DB
 }
 
-func NewDbJobRepo(db *sqlx.DB) *DbJobRepo {
-	return &DbJobRepo{db: db}
+func NewJobRepo(db *sqlx.DB) *JobRepo {
+	return &JobRepo{db: db}
 }
 
-func (s DbJobRepo) CreateJobs(ctx context.Context, orderId string, process *domain.Process) error {
+func (s JobRepo) CreateJobs(ctx context.Context, orderId string, process *Process) error {
+	const op = "JobRepo.CreateJobs"
+
 	if tx, ok := TransactionFromContext(ctx); ok {
 		jobTraceStr, err := tracing.SpanStrFromContext(ctx)
 		if err != nil {
-			return err
+			return domain.E(op, "can't get span string", err)
 		}
 		for _, task := range process.Tasks {
 			// Calculate count of relations
@@ -49,31 +59,40 @@ func (s DbJobRepo) CreateJobs(ctx context.Context, orderId string, process *doma
 			}
 			if _, err := tx.ExecContext(ctx, createJobs, process.Id, task.Id, task.Category, task.Action, orderId,
 				task.ReadMappingId, readyRequired, jobTraceStr); err != nil {
-				return fmt.Errorf("can't create job (%s): %v", task.Id, err)
+
+				return domain.E(op, fmt.Sprintf("can't create job (%s)", task.Id), err)
 			}
 		}
 		return nil
 	}
-	return errors.New("can't create jobs without transaction")
+	return domain.E(op, "there's no active transaction")
 }
 
-func (s DbJobRepo) GetReadyJobs(ctx context.Context, jobLimit int) ([]domain.Job, error) {
-	var jobs []domain.Job
+func (s JobRepo) GetReadyJobs(ctx context.Context, jobLimit int) ([]Job, error) {
+	const op = "JobRepo.GetReadyJobs"
+
+	var jobs []Job
 	if err := s.db.SelectContext(ctx, &jobs, getReadyJobs, jobLimit); err != nil {
-		return nil, fmt.Errorf("can't get ready jobs: %v", err)
+		return nil, domain.E(op, err)
 	}
 	return jobs, nil
 }
 
-func (s DbJobRepo) CompleteJob(ctx context.Context, taskId, orderId string) error {
+func (s JobRepo) CompleteJob(ctx context.Context, taskId, orderId string) error {
+	const op = "JobRepo.CompleteJob"
+
 	if tx, ok := TransactionFromContext(ctx); ok {
-		if _, err := tx.ExecContext(ctx, completeJob, taskId, orderId); err != nil {
-			return fmt.Errorf("can't complete job (%s, %s): %v", taskId, orderId, err)
+		result, err := tx.ExecContext(ctx, completeJob, taskId, orderId)
+		if err != nil {
+			return domain.E(op, fmt.Sprintf("can't complete job (%s, %s)", taskId, orderId), err)
+		}
+		if count, _ := result.RowsAffected(); count == 0 {
+			return domain.E(op, domain.ErrNotFound)
 		}
 		if _, err := tx.ExecContext(ctx, completeRelatedJobs, taskId, orderId); err != nil {
-			return fmt.Errorf("can't complete related jobs (%s, %s): %v", taskId, orderId, err)
+			return domain.E(op, fmt.Sprintf("can't complete related jobs (%s, %s)", taskId, orderId), err)
 		}
 		return nil
 	}
-	return errors.New("can't complete job without transaction")
+	return domain.E(op, "there's no active transaction")
 }

@@ -25,13 +25,6 @@ type Specification struct {
 	Id string
 }*/
 
-type OrderRepo interface {
-	GetAll(ctx context.Context) ([]Order, error)
-	Create(ctx context.Context, order *Order) (*Order, error)
-	GetById(ctx context.Context, id string) (*Order, error)
-	DeleteById(ctx context.Context, id string) error
-}
-
 type OrderService interface {
 	SubmitOrder(ctx context.Context, order *Order, processId string) (*Order, error)
 	GetOrders(ctx context.Context) ([]Order, error)

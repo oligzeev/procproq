@@ -1,8 +1,8 @@
 package main
 
 import (
-	"example.com/oligzeev/pp-gin/internal/config"
-	"example.com/oligzeev/pp-gin/internal/metrics"
+	config2 "example.com/oligzeev/pp-gin/internal/config"
+	"example.com/oligzeev/pp-gin/internal/metric"
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"github.com/fvbock/endless"
@@ -30,20 +30,20 @@ func main() {
 // *** Initialize components ***
 // *****************************
 
-func initConfig(yamlFileName, envPrefix string) *config.ApplicationConfig {
-	appConfig, err := config.ReadConfig(yamlFileName, envPrefix)
+func initConfig(yamlFileName, envPrefix string) *config2.ApplicationConfig {
+	appConfig, err := config2.ReadConfig(yamlFileName, envPrefix)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return appConfig
 }
 
-func initLogger(cfg config.LoggingConfig) {
+func initLogger(cfg config2.LoggingConfig) {
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.SetLevel(log.Level(cfg.Level))
 }
 
-func initTracing(cfg config.TracingConfig) (opentracing.Tracer, io.Closer) {
+func initTracing(cfg config2.TracingConfig) (opentracing.Tracer, io.Closer) {
 	tracingCfg := jaegerconf.Configuration{
 		ServiceName: cfg.ServiceName,
 		Sampler: &jaegerconf.SamplerConfig{
@@ -62,19 +62,19 @@ func initTracing(cfg config.TracingConfig) (opentracing.Tracer, io.Closer) {
 	return tracer, closer
 }
 
-func initRouter(restCfg config.RestConfig, balanceCfg config.BalanceConfig) *gin.Engine {
+func initRouter(restCfg config2.RestConfig, balanceCfg config2.BalanceConfig) *gin.Engine {
 	router := gin.Default()
 
 	// Jaeger middleware initialization
 	router.Use(tracing.Middleware(), rest.BalanceMiddleware(balanceCfg.RequestUrl, balanceCfg.RetryMax))
 
 	// Prometheus handler initialization
-	router.GET(restCfg.MetricsUrl, metrics.PrometheusHandler())
+	router.GET(restCfg.MetricsUrl, metric.PrometheusHandler())
 
 	return router
 }
 
-func initServer(cfg config.RestConfig, r *gin.Engine) {
+func initServer(cfg config2.RestConfig, r *gin.Engine) {
 	if err := endless.ListenAndServe(cfg.Host+":"+strconv.Itoa(cfg.Port), r); err != nil {
 		log.Fatal(err)
 	}

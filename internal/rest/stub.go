@@ -2,7 +2,7 @@ package rest
 
 import (
 	"encoding/json"
-	"example.com/oligzeev/pp-gin/internal/config"
+	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"github.com/gin-gonic/gin"
@@ -20,7 +20,7 @@ type StubRestHandler struct {
 	responseUrl        string
 }
 
-func NewStubRestHandler(cfg config.StubConfig) *StubRestHandler {
+func NewStubRestHandler(cfg config2.StubConfig) *StubRestHandler {
 	client := retryablehttp.NewClient()
 	client.RetryMax = cfg.SendJobRetriesMax
 	return &StubRestHandler{
@@ -41,7 +41,7 @@ func (h StubRestHandler) start(c *gin.Context) {
 
 	var startJob domain.JobStartMessage
 	if err := c.BindJSON(&startJob); err != nil {
-		c.JSON(http.StatusInternalServerError, NewError(err))
+		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
 	go func() {

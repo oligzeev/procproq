@@ -5,7 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"example.com/oligzeev/pp-gin/internal/config"
+	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"fmt"
 	_ "github.com/jackc/pgx/stdlib"
@@ -28,7 +28,9 @@ func (b *Body) Scan(value interface{}) error {
 }
 
 // For more usages of sqlx see https://jmoiron.github.io/sqlx/
-func DbConnect(cfg config.DbConfig) (*sqlx.DB, error) {
+func DbConnect(cfg config2.DbConfig) (*sqlx.DB, error) {
+	const op = "Database.Connect"
+
 	cs := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DbName)
 	log.Debugf("Connect to database: %s\n", cs)
@@ -36,7 +38,7 @@ func DbConnect(cfg config.DbConfig) (*sqlx.DB, error) {
 	var db *sqlx.DB
 	var err error
 	if db, err = sqlx.Connect("pgx", cs); err != nil {
-		return nil, fmt.Errorf("can't establish database connection: %v", err)
+		return nil, domain.E(op, "can't establish database connection", err)
 	}
 	db.SetMaxOpenConns(cfg.MaxConnections)
 	db.SetMaxIdleConns(cfg.MaxIdleConnections)
@@ -60,20 +62,22 @@ func TransactionFromContext(ctx context.Context) (*sqlx.Tx, bool) {
 type txFunc func(txCtx context.Context) (interface{}, error)
 
 func ExecTx(ctx context.Context, db *sqlx.DB, f txFunc) (interface{}, error) {
+	const op = "Transaction.Exec"
+
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("can't begin transaction: %v", err)
+		return nil, domain.E(op, "can't begin transaction", err)
 	}
 	txCtx := WithTransaction(ctx, tx)
 	result, err := f(txCtx)
 	if err != nil {
 		if err := tx.Rollback(); err != nil {
-			return nil, fmt.Errorf("can't rollback transaction: %v", err)
+			return nil, domain.E(op, "can't rollback transaction", err)
 		}
-		return nil, fmt.Errorf("transaction has rolled back: %v", err)
+		return nil, domain.E(op, "transaction has rolled back", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("can't commit transaction: %v", err)
+		return nil, domain.E(op, "can't commit transaction", err)
 	}
 	return result, nil
 }

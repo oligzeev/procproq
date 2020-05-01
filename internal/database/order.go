@@ -16,49 +16,36 @@ const (
 	deleteOrderById = `DELETE FROM pp_order WHERE order_id = $1`
 )
 
-type OrderEntity struct {
+type Order struct {
 	Id        string `db:"order_id"`
 	ProcessId string `db:"process_id"`
 	Body      Body   `db:"body"`
 }
 
-func toOrder(obj *OrderEntity) *domain.Order {
-	return &domain.Order{Id: obj.Id, ProcessId: obj.ProcessId, Body: domain.Body(obj.Body)}
-}
-
-func toOrders(arr []OrderEntity) []domain.Order {
-	result := make([]domain.Order, len(arr))
-	for i, obj := range arr {
-		result[i].Id = obj.Id
-		result[i].ProcessId = obj.ProcessId
-		result[i].Body = domain.Body(obj.Body)
-	}
-	return result
-}
-
-// OrderRepo via postgres database
-type DbOrderRepo struct {
+type OrderRepo struct {
 	db *sqlx.DB
 }
 
-func NewDbOrderRepo(db *sqlx.DB) *DbOrderRepo {
-	return &DbOrderRepo{db: db}
+func NewOrderRepo(db *sqlx.DB) *OrderRepo {
+	return &OrderRepo{db: db}
 }
 
-// Get all orders
-func (s DbOrderRepo) GetAll(ctx context.Context) ([]domain.Order, error) {
-	var order []OrderEntity
+func (s OrderRepo) GetAll(ctx context.Context) ([]Order, error) {
+	const op = "OrderRepo.GetAll"
+
+	var order []Order
 	if err := s.db.SelectContext(ctx, &order, getOrders); err != nil {
-		return nil, fmt.Errorf("can't get orders: %v", err)
+		return nil, domain.E(op, err)
 	}
-	return toOrders(order), nil
+	return order, nil
 }
 
-// Create order
-func (s DbOrderRepo) Create(ctx context.Context, obj *domain.Order) (*domain.Order, error) {
+func (s OrderRepo) Create(ctx context.Context, obj *Order) (*Order, error) {
+	const op = "OrderRepo.Create"
+
 	id, err := uuid.NewUUID()
 	if err != nil {
-		return nil, fmt.Errorf("can't generate uuid: %v", err)
+		return nil, domain.E(op, "can't generate uuid", err)
 	}
 	obj.Id = id.String()
 
@@ -68,27 +55,34 @@ func (s DbOrderRepo) Create(ctx context.Context, obj *domain.Order) (*domain.Ord
 		_, err = s.db.ExecContext(ctx, createOrder, obj.Id, obj.ProcessId, Body(obj.Body))
 	}
 	if err != nil {
-		return nil, fmt.Errorf("can't create order (%s, %s): %v", obj.Id, obj.ProcessId, err)
+		return nil, domain.E(op, fmt.Errorf("can't create order (%s)", obj.ProcessId), err)
 	}
 	return obj, nil
 }
 
-// Get order by Id
-func (s DbOrderRepo) GetById(ctx context.Context, id string) (*domain.Order, error) {
-	var result OrderEntity
+func (s OrderRepo) GetById(ctx context.Context, id string) (*Order, error) {
+	const op = "OrderRepo.GetById"
+
+	var result Order
 	if err := s.db.GetContext(ctx, &result, getOrderById, id); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil
+			return nil, domain.E(op, domain.ErrNotFound)
 		}
-		return nil, fmt.Errorf("can't get order (%s): %v", id, err)
+		return nil, domain.E(op, err)
 	}
-	return toOrder(&result), nil
+	return &result, nil
 }
 
 // Delete order by Id
-func (s DbOrderRepo) DeleteById(ctx context.Context, id string) error {
-	if _, err := s.db.ExecContext(ctx, deleteOrderById, id); err != nil {
-		return fmt.Errorf("can't delete order (%s): %v", id, err)
+func (s OrderRepo) DeleteById(ctx context.Context, id string) error {
+	const op = "OrderRepo.DeleteById"
+
+	result, err := s.db.ExecContext(ctx, deleteOrderById, id)
+	if err != nil {
+		return domain.E(op, err)
+	}
+	if count, _ := result.RowsAffected(); count == 0 {
+		return domain.E(op, domain.ErrNotFound)
 	}
 	return nil
 }

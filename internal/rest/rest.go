@@ -15,8 +15,16 @@ const (
 	ParamProcessId = "process_id"
 )
 
-func NewError(err error) domain.Error {
-	return domain.Error{Error: err.Error()}
+type Error struct {
+	Ops      []domain.ErrOp `json:"ops"`
+	Messages []string       `json:"messages"`
+}
+
+func E(err error) *Error {
+	return &Error{
+		Ops:      domain.EOps(err),
+		Messages: domain.EMsgs(err),
+	}
 }
 
 // opentracing.GlobalTracer() have to be initialized
