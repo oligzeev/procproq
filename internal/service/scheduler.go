@@ -9,16 +9,10 @@ import (
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"fmt"
-	"github.com/PaesslerAG/gval"
-	"github.com/PaesslerAG/jsonpath"
 	"github.com/hashicorp/go-retryablehttp"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
-)
-
-var (
-	jsonpathLanguage = gval.Full(jsonpath.PlaceholderExtension())
 )
 
 type JobScheduler struct {
@@ -126,12 +120,7 @@ func buildStartJobBody(ctx context.Context, mapping *domain.ReadMapping, orderBo
 	const op = "JobScheduler.BuildStartJobBody"
 
 	var result = make(domain.Body)
-	for key, value := range mapping.Body {
-		strValue := value.(string)
-		tasksPath, err := jsonpathLanguage.NewEvaluable(strValue)
-		if err != nil {
-			return nil, domain.E(op, fmt.Sprintf("can't create new evaluator (%s)", value), err)
-		}
+	for key, tasksPath := range mapping.PreparedBody {
 		value, err := tasksPath(ctx, map[string]interface{}(orderBody))
 		if err != nil {
 			return nil, domain.E(op, fmt.Sprintf("can't evaluate value (%s)", value), err)

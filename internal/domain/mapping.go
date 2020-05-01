@@ -1,10 +1,14 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"github.com/PaesslerAG/gval"
+)
 
 type ReadMapping struct {
-	Id   string `json:"id"`
-	Body Body   `json:"body"`
+	Id           string                    `json:"id"`
+	Body         Body                      `json:"body"`
+	PreparedBody map[string]gval.Evaluable `json:"-"`
 }
 
 type ReadMappingService interface {

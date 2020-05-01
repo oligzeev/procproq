@@ -13,7 +13,7 @@ type CachedOrderService struct {
 }
 
 func NewCachedOrderService(cacheSize int, service domain.OrderService) (*CachedOrderService, error) {
-	const op domain.ErrOp = "CachedReadMappingService.Init"
+	const op = "CachedReadMappingService.Init"
 
 	cache, err := lru.New(cacheSize)
 	if err != nil {
@@ -37,7 +37,7 @@ func (s CachedOrderService) GetOrders(ctx context.Context) ([]domain.Order, erro
 }
 
 func (s CachedOrderService) GetOrderById(ctx context.Context, id string) (*domain.Order, error) {
-	const op domain.ErrOp = "CachedReadMappingService.GetOrderById"
+	const op = "CachedReadMappingService.GetOrderById"
 
 	if cachedObj, exists := s.cache.Get(id); exists {
 		if obj, ok := cachedObj.(*domain.Order); ok {

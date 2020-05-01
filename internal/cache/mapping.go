@@ -13,7 +13,7 @@ type CachedReadMappingService struct {
 }
 
 func NewCachedReadMappingService(cacheSize int, service domain.ReadMappingService) (*CachedReadMappingService, error) {
-	const op domain.ErrOp = "CachedReadMappingService.Init"
+	const op = "CachedReadMappingService.Init"
 
 	cache, err := lru.New(cacheSize)
 	if err != nil {
@@ -37,7 +37,7 @@ func (s CachedReadMappingService) Create(ctx context.Context, obj *domain.ReadMa
 }
 
 func (s CachedReadMappingService) GetById(ctx context.Context, id string) (*domain.ReadMapping, error) {
-	const op domain.ErrOp = "CachedReadMappingService.GetById"
+	const op = "CachedReadMappingService.GetById"
 
 	if cachedObj, exists := s.cache.Get(id); exists {
 		if obj, ok := cachedObj.(*domain.ReadMapping); ok {

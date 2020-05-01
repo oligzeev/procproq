@@ -4,6 +4,13 @@ import (
 	"context"
 	"example.com/oligzeev/pp-gin/internal/database"
 	"example.com/oligzeev/pp-gin/internal/domain"
+	"fmt"
+	"github.com/PaesslerAG/gval"
+	"github.com/PaesslerAG/jsonpath"
+)
+
+var (
+	jsonpathLanguage = gval.Full(jsonpath.PlaceholderExtension())
 )
 
 func toReadMapping(obj *database.ReadMapping) *domain.ReadMapping {
@@ -32,7 +39,7 @@ func NewReadMappingService(readMappingRepo *database.ReadMappingRepo) *ReadMappi
 }
 
 func (s ReadMappingService) GetAll(ctx context.Context) ([]domain.ReadMapping, error) {
-	const op domain.ErrOp = "ReadMappingService.GetAll"
+	const op = "ReadMappingService.GetAll"
 
 	result, err := s.repo.GetAll(ctx)
 	if err != nil {
@@ -42,7 +49,7 @@ func (s ReadMappingService) GetAll(ctx context.Context) ([]domain.ReadMapping, e
 }
 
 func (s ReadMappingService) Create(ctx context.Context, obj *domain.ReadMapping) (*domain.ReadMapping, error) {
-	const op domain.ErrOp = "ReadMappingService.Create"
+	const op = "ReadMappingService.Create"
 
 	result, err := s.repo.Create(ctx, fromReadMapping(obj))
 	if err != nil {
@@ -52,17 +59,27 @@ func (s ReadMappingService) Create(ctx context.Context, obj *domain.ReadMapping)
 }
 
 func (s ReadMappingService) GetById(ctx context.Context, id string) (*domain.ReadMapping, error) {
-	const op domain.ErrOp = "ReadMappingService.GetById"
+	const op = "ReadMappingService.GetById"
 
-	result, err := s.repo.GetById(ctx, id)
+	mapping, err := s.repo.GetById(ctx, id)
 	if err != nil {
 		return nil, domain.E(op, err)
 	}
-	return toReadMapping(result), err
+	result := toReadMapping(mapping)
+	result.PreparedBody = make(map[string]gval.Evaluable)
+	for key, value := range result.Body {
+		strValue := value.(string)
+		tasksPath, err := jsonpathLanguage.NewEvaluable(strValue)
+		if err != nil {
+			return nil, domain.E(op, fmt.Sprintf("can't create evaluator (%s)", value), err)
+		}
+		result.PreparedBody[key] = tasksPath
+	}
+	return result, nil
 }
 
 func (s ReadMappingService) DeleteById(ctx context.Context, id string) error {
-	const op domain.ErrOp = "ReadMappingService.DeleteById"
+	const op = "ReadMappingService.DeleteById"
 
 	err := s.repo.DeleteById(ctx, id)
 	if err != nil {
