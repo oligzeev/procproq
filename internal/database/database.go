@@ -28,12 +28,12 @@ func (b *Body) Scan(value interface{}) error {
 }
 
 // For more usages of sqlx see https://jmoiron.github.io/sqlx/
-func DbConnect(cfg config2.DbConfig) (*sqlx.DB, error) {
+func Connect(cfg config2.DbConfig) (*sqlx.DB, error) {
 	const op = "Database.Connect"
 
 	cs := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DbName)
-	log.Debugf("Connect to database: %s\n", cs)
+	log.Debugf("Connect to database: %s", cs)
 
 	var db *sqlx.DB
 	var err error

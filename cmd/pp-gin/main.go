@@ -102,7 +102,7 @@ func initTracing(cfg config2.TracingConfig) (opentracing.Tracer, io.Closer) {
 }
 
 func initDatabase(cfg config2.DbConfig) *sqlx.DB {
-	db, err := database.DbConnect(cfg)
+	db, err := database.Connect(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
