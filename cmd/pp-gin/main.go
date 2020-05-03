@@ -23,7 +23,7 @@ import (
 
 	"github.com/gin-contrib/pprof"
 
-	_ "example.com/oligzeev/pp-gin/docs"
+	_ "example.com/oligzeev/pp-gin/api/swagger"
 )
 
 // @title PP Gin
@@ -116,7 +116,7 @@ func initRouter(cfg config2.RestConfig, handlers []domain.RestHandler) *gin.Engi
 	router.Use(tracing.Middleware())
 
 	// Swagger handler initialization
-	// From the root directory: swag init --dir ./ --generalInfo ./cmd/pp-gin/main.go
+	// From the root directory: swag init --dir ./ --generalInfo ./cmd/pp-gin/main.go --output ./api/swagger
 	router.GET(cfg.SwaggerUrl+"/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Prometheus handler initialization

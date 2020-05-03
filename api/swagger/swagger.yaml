@@ -1,0 +1,358 @@
+definitions:
+  domain.Body:
+    additionalProperties: true
+    type: object
+  domain.Error:
+    type: object
+  domain.JobCompleteMessage:
+    properties:
+      orderId:
+        type: string
+      taskId:
+        type: string
+    type: object
+  domain.Order:
+    properties:
+      body:
+        $ref: '#/definitions/domain.Body'
+        type: object
+      id:
+        type: string
+      processId:
+        type: string
+    type: object
+  domain.Process:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      taskRelations:
+        items:
+          $ref: '#/definitions/domain.TaskRelation'
+        type: array
+      tasks:
+        items:
+          $ref: '#/definitions/domain.Task'
+        type: array
+    type: object
+  domain.ReadMapping:
+    properties:
+      body:
+        $ref: '#/definitions/domain.Body'
+        type: object
+      id:
+        type: string
+    type: object
+  domain.Task:
+    properties:
+      action:
+        type: string
+      category:
+        description: TBD Return string value instead of integer
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+      readMappingId:
+        type: string
+    type: object
+  domain.TaskRelation:
+    properties:
+      childId:
+        type: string
+      parentId:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: This is a PP-Gin application.
+  license: {}
+  title: PP Gin
+  version: 0.0.1
+paths:
+  /job/complete:
+    post:
+      consumes:
+      - application/json
+      description: Method to complete job
+      parameters:
+      - description: Complete Job Message
+        in: body
+        name: complete_job_message
+        required: true
+        schema:
+          $ref: '#/definitions/domain.JobCompleteMessage'
+      produces:
+      - application/json
+      responses:
+        "200": {}
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Complete Job
+      tags:
+      - Job
+  /mapping:
+    get:
+      consumes:
+      - application/json
+      description: Method to get all read mappings
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.ReadMapping'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Get Read Mappings
+      tags:
+      - Read Mapping
+    post:
+      consumes:
+      - application/json
+      description: Method to create read mapping
+      parameters:
+      - description: Read Mapping (without id)
+        in: body
+        name: read_mapping
+        required: true
+        schema:
+          $ref: '#/definitions/domain.ReadMapping'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ReadMapping'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Create Read Mapping
+      tags:
+      - Read Mapping
+  /mapping/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Method to delete read mapping by id
+      parameters:
+      - description: Read Mapping Id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200": {}
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Delete Read Mapping by Id
+      tags:
+      - Read Mapping
+    get:
+      consumes:
+      - application/json
+      description: Method to get read mapping by id
+      parameters:
+      - description: Read Mapping Id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.ReadMapping'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Get Read Mapping by Id
+      tags:
+      - Read Mapping
+  /order:
+    get:
+      consumes:
+      - application/json
+      description: Method to get all orders
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Order'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Get Orders
+      tags:
+      - Order
+    post:
+      consumes:
+      - application/json
+      description: Method to submit order
+      parameters:
+      - description: Process Id
+        in: path
+        name: process_id
+        required: true
+        type: string
+      - description: Order (without id)
+        in: body
+        name: order
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Order'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Order'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Submit Order
+      tags:
+      - Order
+  /order/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Method to get Order by id
+      parameters:
+      - description: Order Id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Order'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Get Order by Id
+      tags:
+      - Order
+  /process:
+    get:
+      consumes:
+      - application/json
+      description: Method to get all processes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Process'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Get Processes
+      tags:
+      - Process
+    post:
+      consumes:
+      - application/json
+      description: Method to create process
+      parameters:
+      - description: Process (without id)
+        in: body
+        name: process
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Process'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Process'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Create Process
+      tags:
+      - Process
+  /process/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Method to delete process by id
+      parameters:
+      - description: Process Id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200": {}
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Delete process by Id
+      tags:
+      - Process
+    get:
+      consumes:
+      - application/json
+      description: Method to get Process by id
+      parameters:
+      - description: Process Id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Process'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/domain.Error'
+      summary: Get Process by Id
+      tags:
+      - Process
+swagger: "2.0"

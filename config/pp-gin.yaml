@@ -23,4 +23,4 @@ scheduler:
   periodSec: 5
   sendJobTimeoutSec: 60
   sendJobRetriesMax: 2
-  jobLimit: 100
+  jobLimit: 10000
