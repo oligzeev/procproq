@@ -36,7 +36,9 @@ type TracingConfig struct {
 }
 
 type LoggingConfig struct {
-	Level int `yaml:"level"`
+	Level           int    `yaml:"level"`
+	TimestampFormat string `yaml:"timestampFormat"`
+	Default         bool   `yaml:"default"`
 }
 
 type BalanceConfig struct {

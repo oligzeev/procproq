@@ -2,7 +2,7 @@ package main
 
 import (
 	"example.com/oligzeev/pp-gin/internal/cache"
-	config2 "example.com/oligzeev/pp-gin/internal/config"
+	appconf "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/database"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"example.com/oligzeev/pp-gin/internal/logging"
@@ -50,7 +50,7 @@ func main() {
 
 	initScheduler(cfg.Scheduler, jobRepo, orderService, readMappingService)
 
-	router := initRouter(cfg.Rest, []domain.RestHandler{
+	router := initRouter(*cfg, []domain.RestHandler{
 		rest.NewMappingRestHandler(readMappingService),
 		rest.NewProcessRestHandler(processService),
 		rest.NewJobRestHandler(orderService),
@@ -63,7 +63,7 @@ func main() {
 // *** Initialize components ***
 // *****************************
 
-func initScheduler(cfg config2.SchedulerConfig, jobRepo *database.JobRepo, orderService domain.OrderService,
+func initScheduler(cfg appconf.SchedulerConfig, jobRepo *database.JobRepo, orderService domain.OrderService,
 	readMappingService domain.ReadMappingService) {
 	if cfg.Enabled {
 		scheduler := service.NewJobScheduler(cfg, jobRepo, orderService, readMappingService)
@@ -71,23 +71,29 @@ func initScheduler(cfg config2.SchedulerConfig, jobRepo *database.JobRepo, order
 	}
 }
 
-func initConfig(yamlFileName, envPrefix string) *config2.ApplicationConfig {
-	appConfig, err := config2.ReadConfig(yamlFileName, envPrefix)
+func initConfig(yamlFileName, envPrefix string) *appconf.ApplicationConfig {
+	appConfig, err := appconf.ReadConfig(yamlFileName, envPrefix)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return appConfig
 }
 
-func initLogger(cfg config2.LoggingConfig) {
-	log.SetFormatter(&logging.TextFormatter{
-		TimestampFormat: "15.04.05 02.01.2006.000000000",
-	})
+func initLogger(cfg appconf.LoggingConfig) {
+	if cfg.Default {
+		log.SetFormatter(&log.TextFormatter{
+			FullTimestamp: true,
+		})
+	} else {
+		log.SetFormatter(&logging.TextFormatter{
+			TimestampFormat: cfg.TimestampFormat,
+		})
+	}
 	log.SetOutput(os.Stdout)
 	log.SetLevel(log.Level(cfg.Level))
 }
 
-func initTracing(cfg config2.TracingConfig) (opentracing.Tracer, io.Closer) {
+func initTracing(cfg appconf.TracingConfig) (opentracing.Tracer, io.Closer) {
 	tracingCfg := jaegerconf.Configuration{
 		ServiceName: cfg.ServiceName,
 		Sampler: &jaegerconf.SamplerConfig{
@@ -106,7 +112,7 @@ func initTracing(cfg config2.TracingConfig) (opentracing.Tracer, io.Closer) {
 	return tracer, closer
 }
 
-func initDatabase(cfg config2.DbConfig) *sqlx.DB {
+func initDatabase(cfg appconf.DbConfig) *sqlx.DB {
 	db, err := database.Connect(cfg)
 	if err != nil {
 		log.Fatal(err)
@@ -114,19 +120,29 @@ func initDatabase(cfg config2.DbConfig) *sqlx.DB {
 	return db
 }
 
-func initRouter(cfg config2.RestConfig, handlers []domain.RestHandler) *gin.Engine {
-	router := gin.Default()
+func initRouter(cfg appconf.ApplicationConfig, handlers []domain.RestHandler) *gin.Engine {
+	router := gin.New()
+
+	// Logging & Recovery middleware
+	if cfg.Logging.Default {
+		router.Use(gin.Logger())
+	} else if cfg.Logging.Level >= 5 {
+		logging.GinLogTimestampFormat = cfg.Logging.TimestampFormat
+		gin.DebugPrintRouteFunc = logging.DebugPrintRouteFunc
+		router.Use(gin.LoggerWithFormatter(logging.GinLogFormatter))
+	}
+	router.Use(gin.Recovery())
 
 	// Jaeger middleware initialization
 	router.Use(tracing.Middleware())
 
 	// Swagger handler initialization
 	// From the root directory: swag init --dir ./ --generalInfo ./cmd/pp-gin/main.go --output ./api/swagger
-	router.GET(cfg.SwaggerUrl+"/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	router.GET(cfg.Rest.SwaggerUrl+"/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Prometheus handler initialization
 	// prom := ginprom.NewPrometheus("gin") and prom.Use(router)
-	router.GET(cfg.MetricsUrl, metric.PrometheusHandler())
+	router.GET(cfg.Rest.MetricsUrl, metric.PrometheusHandler())
 
 	// PProf handler initialization
 	// https://github.com/gin-contrib/pprof
@@ -139,7 +155,7 @@ func initRouter(cfg config2.RestConfig, handlers []domain.RestHandler) *gin.Engi
 	return router
 }
 
-func initServer(cfg config2.RestConfig, r *gin.Engine) {
+func initServer(cfg appconf.RestConfig, r *gin.Engine) {
 	if err := endless.ListenAndServe(cfg.Host+":"+strconv.Itoa(cfg.Port), r); err != nil {
 		log.Fatal(err)
 	}
@@ -149,7 +165,7 @@ func initServer(cfg config2.RestConfig, r *gin.Engine) {
 // *** Create repositories ***
 // ***************************
 
-func NewReadMappingService(cfg config2.CacheConfig, repo *database.ReadMappingRepo) domain.ReadMappingService {
+func NewReadMappingService(cfg appconf.CacheConfig, repo *database.ReadMappingRepo) domain.ReadMappingService {
 	service, err := cache.NewCachedReadMappingService(cfg.DefaultEntityCount, service.NewReadMappingService(repo))
 	if err != nil {
 		log.Fatal(err)
@@ -157,7 +173,7 @@ func NewReadMappingService(cfg config2.CacheConfig, repo *database.ReadMappingRe
 	return tracing.NewSpanReadMappingService(service)
 }
 
-func NewProcessService(cfg config2.CacheConfig, db *sqlx.DB, repo *database.ProcessRepo) domain.ProcessService {
+func NewProcessService(cfg appconf.CacheConfig, db *sqlx.DB, repo *database.ProcessRepo) domain.ProcessService {
 	service, err := cache.NewCachedProcessRepo(cfg.DefaultEntityCount, service.NewProcessService(db, repo))
 	if err != nil {
 		log.Fatal(err)
@@ -165,7 +181,7 @@ func NewProcessService(cfg config2.CacheConfig, db *sqlx.DB, repo *database.Proc
 	return tracing.NewSpanProcessService(service)
 }
 
-func NewOrderService(cfg config2.CacheConfig, db *sqlx.DB, processService domain.ProcessService,
+func NewOrderService(cfg appconf.CacheConfig, db *sqlx.DB, processService domain.ProcessService,
 	orderRepo *database.OrderRepo, jobRepo *database.JobRepo) domain.OrderService {
 
 	service := service.NewOrderService(db, processService, orderRepo, jobRepo)

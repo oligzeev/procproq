@@ -17,7 +17,9 @@ db:
 cache:
   defaultEntityCount: 20
 logging:
-  level: 6 # trace
+  level: 6 # 6:trace
+  timestampFormat: 15.04.05 02.01.2006.000000000
+  default: false
 scheduler:
   enabled: true
   periodSec: 5
