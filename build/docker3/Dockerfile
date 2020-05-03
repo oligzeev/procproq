@@ -5,10 +5,11 @@
 
 FROM golang:latest AS builder
 ARG GIT_REPO
-ENV GO111MODULE=on \
-    CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
+
+ENV CGO_ENABLED=0 \
+#   GO111MODULE=on \
+#   GOARCH=amd64 \
+    GOOS=linux
 RUN mkdir /app
 WORKDIR /app
 RUN git clone -v $GIT_REPO /app

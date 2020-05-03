@@ -5,6 +5,7 @@ import (
 	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/database"
 	"example.com/oligzeev/pp-gin/internal/domain"
+	"example.com/oligzeev/pp-gin/internal/logging"
 	"example.com/oligzeev/pp-gin/internal/metric"
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/service"
@@ -19,6 +20,7 @@ import (
 	"github.com/uber/jaeger-client-go"
 	jaegerconf "github.com/uber/jaeger-client-go/config"
 	"io"
+	"os"
 	"strconv"
 
 	"github.com/gin-contrib/pprof"
@@ -78,7 +80,10 @@ func initConfig(yamlFileName, envPrefix string) *config2.ApplicationConfig {
 }
 
 func initLogger(cfg config2.LoggingConfig) {
-	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
+	log.SetFormatter(&logging.TextFormatter{
+		TimestampFormat: "15.04.05 02.01.2006.000000000",
+	})
+	log.SetOutput(os.Stdout)
 	log.SetLevel(log.Level(cfg.Level))
 }
 
