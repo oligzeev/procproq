@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"example.com/oligzeev/pp-gin/internal/cache"
 	appconf "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/database"
@@ -10,7 +11,6 @@ import (
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/service"
 	"example.com/oligzeev/pp-gin/internal/tracing"
-	"github.com/fvbock/endless"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	"github.com/opentracing/opentracing-go"
@@ -20,8 +20,12 @@ import (
 	"github.com/uber/jaeger-client-go"
 	jaegerconf "github.com/uber/jaeger-client-go/config"
 	"io"
+	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/gin-contrib/pprof"
 
@@ -155,10 +159,31 @@ func initRouter(cfg appconf.ApplicationConfig, handlers []domain.RestHandler) *g
 	return router
 }
 
+// E.g. https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/server.go
 func initServer(cfg appconf.RestConfig, r *gin.Engine) {
-	if err := endless.ListenAndServe(cfg.Host+":"+strconv.Itoa(cfg.Port), r); err != nil {
-		log.Fatal(err)
+	srv := &http.Server{
+		Addr:    cfg.Host + ":" + strconv.Itoa(cfg.Port),
+		Handler: r,
 	}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+
+	quit := make(chan os.Signal)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Info("Closing rest server")
+
+	// TBD Close scheduler gracefully
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TBD Configurable timeout
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Rest server forced to Close: %v", err)
+	}
+	log.Info("Rest server has been closed")
 }
 
 // ***************************
