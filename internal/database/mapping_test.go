@@ -19,9 +19,8 @@ func TestReadMappingRepo_GetAll_Success(t *testing.T) {
 		[]interface{}(nil)).Return(nil)
 
 	repo := ReadMappingRepo{db: mockDB}
-	result, err := repo.GetAll(testCtx)
+	err := repo.GetAll(testCtx, &readMappings)
 	assert.Nil(err)
-	assert.Equal(readMappings, result)
 }
 
 func TestReadMappingRepo_GetAll_Error(t *testing.T) {
@@ -36,8 +35,7 @@ func TestReadMappingRepo_GetAll_Error(t *testing.T) {
 	mockDB.On("SelectContext", testCtx, &readMappings, GetReadMappings, []interface{}(nil)).Return(mockErr)
 
 	repo := ReadMappingRepo{db: mockDB}
-	result, err := repo.GetAll(testCtx)
-	assert.Nil(result)
+	err := repo.GetAll(testCtx, &readMappings)
 
 	assert.NotNil(err)
 	domainErr := toError(t, op, err)
@@ -60,11 +58,10 @@ func TestReadMappingRepo_Create_Success(t *testing.T) {
 	repo := ReadMappingRepo{db: mockDB, newUUIDFunc: func() (uuid.UUID, error) {
 		return mockUUID, nil
 	}}
-	result, err := repo.Create(testCtx, readMapping)
+	err := repo.Create(testCtx, readMapping)
 	assert.Nil(err)
-	assert.NotNil(result)
-	assert.Equal(strUUID, result.Id)
-	assert.Equal(mockBody, result.Body)
+	assert.Equal(strUUID, readMapping.Id)
+	assert.Equal(mockBody, readMapping.Body)
 }
 
 func TestReadMappingRepo_Create_UUID(t *testing.T) {
@@ -82,8 +79,7 @@ func TestReadMappingRepo_Create_UUID(t *testing.T) {
 		var mockUUID uuid.UUID
 		return mockUUID, mockErr
 	}}
-	result, err := repo.Create(testCtx, readMapping)
-	assert.Nil(result)
+	err := repo.Create(testCtx, readMapping)
 
 	assert.NotNil(err)
 	domainErr := toError(t, op, err)
@@ -110,8 +106,7 @@ func TestReadMappingRepo_Create_Error(t *testing.T) {
 	repo := ReadMappingRepo{db: mockDB, newUUIDFunc: func() (uuid.UUID, error) {
 		return mockUUID, nil
 	}}
-	result, err := repo.Create(testCtx, readMapping)
-	assert.Nil(result)
+	err := repo.Create(testCtx, readMapping)
 
 	assert.NotNil(err)
 	domainErr := toError(t, op, err)
@@ -130,10 +125,8 @@ func TestReadMappingRepo_GetById_Success(t *testing.T) {
 		[]interface{}{id}).Return(nil)
 
 	repo := ReadMappingRepo{db: mockDB}
-	result, err := repo.GetById(testCtx, id)
+	err := repo.GetById(testCtx, id, readMapping)
 	assert.Nil(err)
-	assert.NotNil(result)
-	assert.Equal(readMapping, result)
 }
 
 func TestReadMappingRepo_GetById_NotFound(t *testing.T) {
@@ -150,9 +143,9 @@ func TestReadMappingRepo_GetById_NotFound(t *testing.T) {
 		[]interface{}{id}).Return(sql.ErrNoRows)
 
 	repo := ReadMappingRepo{db: mockDB}
-	result, err := repo.GetById(testCtx, id)
+	err := repo.GetById(testCtx, id, readMapping)
+
 	assert.NotNil(err)
-	assert.Nil(result)
 	domainErr := toError(t, op, err)
 	assert.Equal(op, string(domainErr.Op))
 	assert.Equal(domain.ErrNotFound, domainErr.Code)
@@ -173,9 +166,9 @@ func TestReadMappingRepo_GetById_Error(t *testing.T) {
 	mockDB.On("GetContext", testCtx, readMapping, GetReadMappingById, []interface{}{id}).Return(mockErr)
 
 	repo := ReadMappingRepo{db: mockDB}
-	result, err := repo.GetById(testCtx, id)
+	err := repo.GetById(testCtx, id, readMapping)
+
 	assert.NotNil(err)
-	assert.Nil(result)
 	domainErr := toError(t, op, err)
 	assert.Equal(op, string(domainErr.Op))
 	assert.Equal(mockErr, domainErr.Err)
@@ -211,6 +204,7 @@ func TestReadMappingRepo_DeleteById_NotFound(t *testing.T) {
 
 	repo := ReadMappingRepo{db: mockDB}
 	err := repo.DeleteById(testCtx, id)
+
 	assert.NotNil(err)
 	domainErr := toError(t, op, err)
 	assert.Equal(op, string(domainErr.Op))
@@ -232,6 +226,7 @@ func TestReadMappingRepo_DeleteById_Error(t *testing.T) {
 
 	repo := ReadMappingRepo{db: mockDB}
 	err := repo.DeleteById(testCtx, id)
+
 	assert.NotNil(err)
 	domainErr := toError(t, op, err)
 	assert.Equal(op, string(domainErr.Op))

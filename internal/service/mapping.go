@@ -41,7 +41,8 @@ func NewReadMappingService(readMappingRepo *database.ReadMappingRepo) *ReadMappi
 func (s ReadMappingService) GetAll(ctx context.Context) ([]domain.ReadMapping, error) {
 	const op = "ReadMappingService.GetAll"
 
-	result, err := s.repo.GetAll(ctx)
+	var result []database.ReadMapping
+	err := s.repo.GetAll(ctx, &result)
 	if err != nil {
 		return nil, domain.E(op, err)
 	}
@@ -51,21 +52,23 @@ func (s ReadMappingService) GetAll(ctx context.Context) ([]domain.ReadMapping, e
 func (s ReadMappingService) Create(ctx context.Context, obj *domain.ReadMapping) (*domain.ReadMapping, error) {
 	const op = "ReadMappingService.Create"
 
-	result, err := s.repo.Create(ctx, fromReadMapping(obj))
+	dbObj := fromReadMapping(obj)
+	err := s.repo.Create(ctx, dbObj)
 	if err != nil {
 		return nil, domain.E(op, err)
 	}
-	return toReadMapping(result), nil
+	return toReadMapping(dbObj), nil
 }
 
 func (s ReadMappingService) GetById(ctx context.Context, id string) (*domain.ReadMapping, error) {
 	const op = "ReadMappingService.GetById"
 
-	mapping, err := s.repo.GetById(ctx, id)
+	var mapping database.ReadMapping
+	err := s.repo.GetById(ctx, id, &mapping)
 	if err != nil {
 		return nil, domain.E(op, err)
 	}
-	result := toReadMapping(mapping)
+	result := toReadMapping(&mapping)
 	result.PreparedBody = make(map[string]gval.Evaluable)
 	for key, value := range result.Body {
 		strValue := value.(string)

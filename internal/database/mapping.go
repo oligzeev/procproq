@@ -28,42 +28,40 @@ func NewReadMappingRepo(db *sqlx.DB, newUUIDFunc NewUUIDFunc) *ReadMappingRepo {
 	return &ReadMappingRepo{db: db, newUUIDFunc: newUUIDFunc}
 }
 
-func (s ReadMappingRepo) GetAll(ctx context.Context) ([]ReadMapping, error) {
+func (s ReadMappingRepo) GetAll(ctx context.Context, result *[]ReadMapping) error {
 	const op = "ReadMappingRepo.GetAll"
 
-	var result []ReadMapping
-	if err := s.db.SelectContext(ctx, &result, GetReadMappings); err != nil {
-		return nil, domain.E(op, err)
+	if err := s.db.SelectContext(ctx, result, GetReadMappings); err != nil {
+		return domain.E(op, err)
 	}
-	return result, nil
+	return nil
 }
 
-func (s ReadMappingRepo) Create(ctx context.Context, obj *ReadMapping) (*ReadMapping, error) {
+func (s ReadMappingRepo) Create(ctx context.Context, result *ReadMapping) error {
 	const op = "ReadMappingRepo.Create"
 
 	id, err := s.newUUIDFunc()
 	if err != nil {
-		return nil, domain.E(op, "can't generate uuid", err)
+		return domain.E(op, "can't generate uuid", err)
 	}
-	obj.Id = id.String()
+	result.Id = id.String()
 
-	if _, err := s.db.ExecContext(ctx, CreateReadMapping, obj.Id, obj.Body); err != nil {
-		return nil, domain.E(op, err)
+	if _, err := s.db.ExecContext(ctx, CreateReadMapping, result.Id, result.Body); err != nil {
+		return domain.E(op, err)
 	}
-	return obj, nil
+	return nil
 }
 
-func (s ReadMappingRepo) GetById(ctx context.Context, id string) (*ReadMapping, error) {
+func (s ReadMappingRepo) GetById(ctx context.Context, id string, result *ReadMapping) error {
 	const op = "ReadMappingRepo.GetById"
 
-	var result ReadMapping
-	if err := s.db.GetContext(ctx, &result, GetReadMappingById, id); err != nil {
+	if err := s.db.GetContext(ctx, result, GetReadMappingById, id); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.E(op, domain.ErrNotFound)
+			return domain.E(op, domain.ErrNotFound)
 		}
-		return nil, domain.E(op, err)
+		return domain.E(op, err)
 	}
-	return &result, nil
+	return nil
 }
 
 func (s ReadMappingRepo) DeleteById(ctx context.Context, id string) error {
