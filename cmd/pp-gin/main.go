@@ -12,6 +12,7 @@ import (
 	"example.com/oligzeev/pp-gin/internal/service"
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/opentracing/opentracing-go"
 	log "github.com/sirupsen/logrus"
@@ -43,7 +44,7 @@ func main() {
 	_, closer := initTracing(cfg.Tracing)
 	defer closer.Close()
 
-	readMappingRepo := database.NewReadMappingRepo(db)
+	readMappingRepo := database.NewReadMappingRepo(db, uuid.NewUUID)
 	processRepo := database.NewProcessRepo(db)
 	jobRepo := database.NewJobRepo(db)
 	orderRepo := database.NewOrderRepo(db)

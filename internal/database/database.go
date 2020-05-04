@@ -2,16 +2,26 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"fmt"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 )
+
+type NewUUIDFunc func() (uuid.UUID, error)
+
+type DB interface {
+	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
 
 type Body domain.Body
 

@@ -13,40 +13,40 @@ const (
 type ErrCode string
 type ErrOp string
 type Error struct {
-	code ErrCode `json:"code"`
-	op   ErrOp   `json:"op"`
-	msg  string  `json:"msg"`
-	err  error   `json:"err"`
+	Code ErrCode `json:"code"`
+	Op   ErrOp   `json:"op"`
+	Msg  string  `json:"msg"`
+	Err  error   `json:"err"`
 }
 
 func (e *Error) Error() string {
 	var buf bytes.Buffer
-	buf.WriteString(string(e.op))
-	if e.code != "" {
+	buf.WriteString(string(e.Op))
+	if e.Code != "" {
 		buf.WriteString("|")
-		buf.WriteString(string(e.code))
+		buf.WriteString(string(e.Code))
 	}
-	if e.msg != "" {
+	if e.Msg != "" {
 		buf.WriteString("|")
-		buf.WriteString(e.msg)
+		buf.WriteString(e.Msg)
 	}
-	if e.err != nil {
+	if e.Err != nil {
 		buf.WriteString(", ")
-		buf.WriteString(e.err.Error())
+		buf.WriteString(e.Err.Error())
 	}
 	return buf.String()
 }
 
 func E(op ErrOp, args ...interface{}) error {
-	e := &Error{op: op}
+	e := &Error{Op: op}
 	for _, arg := range args {
 		switch arg := arg.(type) {
 		case error:
-			e.err = arg
+			e.Err = arg
 		case ErrCode:
-			e.code = arg
+			e.Code = arg
 		case string:
-			e.msg = arg
+			e.Msg = arg
 		}
 	}
 	return e
@@ -55,18 +55,18 @@ func E(op ErrOp, args ...interface{}) error {
 func ECode(err error) ErrCode {
 	if err == nil {
 		return ""
-	} else if e, ok := err.(*Error); ok && e.code != "" {
-		return e.code
-	} else if ok && e.err != nil {
-		return ECode(e.err)
+	} else if e, ok := err.(*Error); ok && e.Code != "" {
+		return e.Code
+	} else if ok && e.Err != nil {
+		return ECode(e.Err)
 	}
 	return ErrInternal
 }
 
 func EOps(err error) []ErrOp {
 	if e, ok := err.(*Error); ok {
-		result := []ErrOp{e.op}
-		nextOps := EOps(e.err)
+		result := []ErrOp{e.Op}
+		nextOps := EOps(e.Err)
 		if nextOps != nil {
 			return append(result, nextOps...)
 		}
@@ -78,12 +78,12 @@ func EOps(err error) []ErrOp {
 func EMsgs(err error) []string {
 	if e, ok := err.(*Error); ok {
 		var result []string
-		msg := e.msg
+		msg := e.Msg
 		if msg != "" {
 			result = append(result, msg)
 		}
-		if e.err != nil {
-			next := EMsgs(e.err)
+		if e.Err != nil {
+			next := EMsgs(e.Err)
 			if next != nil {
 				result = append(result, next...)
 			}
