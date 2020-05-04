@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -120,7 +119,7 @@ func BenchmarkBuildStartJobBody16(b *testing.B) {
 	}
 }
 
-func TestBuildStartJobBody(t *testing.T) {
+/*func TestBuildStartJobBody(t *testing.T) {
 	mapping, body := unmarshalTD(mappingStr1, bodyStr1)
 	result, err := buildStartJobBody(context.Background(), mapping, body)
 	if err != nil {
@@ -136,7 +135,7 @@ func TestBuildStartJobBody(t *testing.T) {
 	assert.Equal("222", value)
 	value, _ = result["key3"]
 	assert.Equal("333", value)
-}
+}*/
 
 func unmarshalTD(mappingStr, bodyStr string) (*domain.ReadMapping, domain.Body) {
 	var mapping domain.ReadMapping

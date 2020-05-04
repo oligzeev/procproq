@@ -1,3 +1,5 @@
+// go test -coverprofile database_test.out -cover example.com/oligzeev/pp-gin/internal/database
+// go tool cover -html database_test.out
 package database
 
 import (
