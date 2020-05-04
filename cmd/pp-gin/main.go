@@ -68,7 +68,7 @@ func main() {
 // *** Initialize components ***
 // *****************************
 
-func initScheduler(cfg appconf.SchedulerConfig, jobRepo *database.JobRepo, orderService domain.OrderService,
+func initScheduler(cfg domain.SchedulerConfig, jobRepo *database.JobRepo, orderService domain.OrderService,
 	readMappingService domain.ReadMappingService) {
 	if cfg.Enabled {
 		scheduler := service.NewJobScheduler(cfg, jobRepo, orderService, readMappingService)
@@ -76,7 +76,7 @@ func initScheduler(cfg appconf.SchedulerConfig, jobRepo *database.JobRepo, order
 	}
 }
 
-func initConfig(yamlFileName, envPrefix string) *appconf.ApplicationConfig {
+func initConfig(yamlFileName, envPrefix string) *domain.ApplicationConfig {
 	appConfig, err := appconf.ReadConfig(yamlFileName, envPrefix)
 	if err != nil {
 		log.Fatal(err)
@@ -84,7 +84,7 @@ func initConfig(yamlFileName, envPrefix string) *appconf.ApplicationConfig {
 	return appConfig
 }
 
-func initLogger(cfg appconf.LoggingConfig) {
+func initLogger(cfg domain.LoggingConfig) {
 	if cfg.Default {
 		log.SetFormatter(&log.TextFormatter{
 			FullTimestamp: true,
@@ -98,7 +98,7 @@ func initLogger(cfg appconf.LoggingConfig) {
 	log.SetLevel(log.Level(cfg.Level))
 }
 
-func initTracing(cfg appconf.TracingConfig) (opentracing.Tracer, io.Closer) {
+func initTracing(cfg domain.TracingConfig) (opentracing.Tracer, io.Closer) {
 	tracingCfg := jaegerconf.Configuration{
 		ServiceName: cfg.ServiceName,
 		Sampler: &jaegerconf.SamplerConfig{
@@ -117,7 +117,7 @@ func initTracing(cfg appconf.TracingConfig) (opentracing.Tracer, io.Closer) {
 	return tracer, closer
 }
 
-func initDatabase(cfg appconf.DbConfig) *sqlx.DB {
+func initDatabase(cfg domain.DbConfig) *sqlx.DB {
 	db, err := database.Connect(cfg)
 	if err != nil {
 		log.Fatal(err)
@@ -125,7 +125,7 @@ func initDatabase(cfg appconf.DbConfig) *sqlx.DB {
 	return db
 }
 
-func initRouter(cfg appconf.ApplicationConfig, handlers []domain.RestHandler) *gin.Engine {
+func initRouter(cfg domain.ApplicationConfig, handlers []domain.RestHandler) *gin.Engine {
 	router := gin.New()
 
 	// Logging & Recovery middleware
@@ -161,7 +161,7 @@ func initRouter(cfg appconf.ApplicationConfig, handlers []domain.RestHandler) *g
 }
 
 // E.g. https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/server.go
-func initServer(cfg appconf.RestConfig, r *gin.Engine) {
+func initServer(cfg domain.RestConfig, r *gin.Engine) {
 	srv := &http.Server{
 		Addr:    cfg.Host + ":" + strconv.Itoa(cfg.Port),
 		Handler: r,
@@ -191,7 +191,7 @@ func initServer(cfg appconf.RestConfig, r *gin.Engine) {
 // *** Create repositories ***
 // ***************************
 
-func NewReadMappingService(cfg appconf.CacheConfig, repo *database.ReadMappingRepo) domain.ReadMappingService {
+func NewReadMappingService(cfg domain.CacheConfig, repo *database.ReadMappingRepo) domain.ReadMappingService {
 	service, err := cache.NewCachedReadMappingService(cfg.DefaultEntityCount, service.NewReadMappingService(repo))
 	if err != nil {
 		log.Fatal(err)
@@ -199,7 +199,7 @@ func NewReadMappingService(cfg appconf.CacheConfig, repo *database.ReadMappingRe
 	return tracing.NewSpanReadMappingService(service)
 }
 
-func NewProcessService(cfg appconf.CacheConfig, db *sqlx.DB, repo *database.ProcessRepo) domain.ProcessService {
+func NewProcessService(cfg domain.CacheConfig, db *sqlx.DB, repo *database.ProcessRepo) domain.ProcessService {
 	service, err := cache.NewCachedProcessRepo(cfg.DefaultEntityCount, service.NewProcessService(db, repo))
 	if err != nil {
 		log.Fatal(err)
@@ -207,7 +207,7 @@ func NewProcessService(cfg appconf.CacheConfig, db *sqlx.DB, repo *database.Proc
 	return tracing.NewSpanProcessService(service)
 }
 
-func NewOrderService(cfg appconf.CacheConfig, db *sqlx.DB, processService domain.ProcessService,
+func NewOrderService(cfg domain.CacheConfig, db *sqlx.DB, processService domain.ProcessService,
 	orderRepo *database.OrderRepo, jobRepo *database.JobRepo) domain.OrderService {
 
 	service := service.NewOrderService(db, processService, orderRepo, jobRepo)

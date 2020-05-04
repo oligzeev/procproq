@@ -13,19 +13,20 @@ var (
 	jsonpathLanguage = gval.Full(jsonpath.PlaceholderExtension())
 )
 
-func toReadMapping(obj *database.ReadMapping) *domain.ReadMapping {
-	return &domain.ReadMapping{Id: obj.Id, Body: domain.Body(obj.Body)}
+func toReadMapping(from *database.ReadMapping, to *domain.ReadMapping) {
+	to.Id = from.Id
+	to.Body = domain.Body(from.Body)
 }
 
-func fromReadMapping(obj *domain.ReadMapping) *database.ReadMapping {
-	return &database.ReadMapping{Id: obj.Id, Body: database.Body(obj.Body)}
+func fromReadMapping(from *domain.ReadMapping, to *database.ReadMapping) {
+	to.Id = from.Id
+	to.Body = database.Body(from.Body)
 }
 
 func toReadMappings(arr []database.ReadMapping) []domain.ReadMapping {
 	result := make([]domain.ReadMapping, len(arr))
 	for i, obj := range arr {
-		result[i].Id = obj.Id
-		result[i].Body = domain.Body(obj.Body)
+		toReadMapping(&obj, &result[i])
 	}
 	return result
 }
@@ -38,45 +39,72 @@ func NewReadMappingService(readMappingRepo *database.ReadMappingRepo) *ReadMappi
 	return &ReadMappingService{repo: readMappingRepo}
 }
 
-func (s ReadMappingService) GetAll(ctx context.Context) ([]domain.ReadMapping, error) {
+func (s ReadMappingService) GetAll(ctx context.Context, result *[]domain.ReadMapping) error {
 	const op = "ReadMappingService.GetAll"
 
-	var result []database.ReadMapping
-	err := s.repo.GetAll(ctx, &result)
+	var repoResult []database.ReadMapping
+	err := s.repo.GetAll(ctx, &repoResult)
 	if err != nil {
-		return nil, domain.E(op, err)
+		return domain.E(op, err)
 	}
-	return toReadMappings(result), nil
+
+	// Propagate result
+	*result = toReadMappings(repoResult)
+	return nil
 }
 
-func (s ReadMappingService) Create(ctx context.Context, obj *domain.ReadMapping) (*domain.ReadMapping, error) {
+func (s ReadMappingService) Create(ctx context.Context, result *domain.ReadMapping) error {
 	const op = "ReadMappingService.Create"
 
-	dbObj := fromReadMapping(obj)
-	err := s.repo.Create(ctx, dbObj)
+	var dbResult database.ReadMapping
+	fromReadMapping(result, &dbResult)
+	err := s.repo.Create(ctx, &dbResult)
 	if err != nil {
-		return nil, domain.E(op, err)
+		return domain.E(op, err)
 	}
-	return toReadMapping(dbObj), nil
+
+	// Propagate generated id
+	result.Id = dbResult.Id
+
+	// Prepare jsonpath evaluators
+	result.PreparedBody, err = prepareBody(result.Body)
+	if err != nil {
+		return domain.E(op, err)
+	}
+	return nil
 }
 
-func (s ReadMappingService) GetById(ctx context.Context, id string) (*domain.ReadMapping, error) {
+func (s ReadMappingService) GetById(ctx context.Context, id string, result *domain.ReadMapping) error {
 	const op = "ReadMappingService.GetById"
 
 	var mapping database.ReadMapping
 	err := s.repo.GetById(ctx, id, &mapping)
 	if err != nil {
-		return nil, domain.E(op, err)
+		return domain.E(op, err)
 	}
-	result := toReadMapping(&mapping)
-	result.PreparedBody = make(map[string]gval.Evaluable)
-	for key, value := range result.Body {
+
+	// Propagate result
+	toReadMapping(&mapping, result)
+
+	// Prepare jsonpath evaluators
+	result.PreparedBody, err = prepareBody(result.Body)
+	if err != nil {
+		return domain.E(op, err)
+	}
+	return nil
+}
+
+func prepareBody(body domain.Body) (domain.PreparedBody, error) {
+	const op = "ReadMappingService.PrepareBody"
+
+	result := make(map[string]gval.Evaluable)
+	for key, value := range body {
 		strValue := value.(string)
 		tasksPath, err := jsonpathLanguage.NewEvaluable(strValue)
 		if err != nil {
 			return nil, domain.E(op, fmt.Sprintf("can't create evaluator (%s)", value), err)
 		}
-		result.PreparedBody[key] = tasksPath
+		result[key] = tasksPath
 	}
 	return result, nil
 }

@@ -2,7 +2,6 @@ package rest
 
 import (
 	"encoding/json"
-	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"github.com/gin-gonic/gin"
@@ -20,7 +19,7 @@ type StubRestHandler struct {
 	responseUrl        string
 }
 
-func NewStubRestHandler(cfg config2.StubConfig) *StubRestHandler {
+func NewStubRestHandler(cfg domain.StubConfig) *StubRestHandler {
 	client := retryablehttp.NewClient()
 	client.RetryMax = cfg.SendJobRetriesMax
 	return &StubRestHandler{

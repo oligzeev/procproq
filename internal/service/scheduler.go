@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/database"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"example.com/oligzeev/pp-gin/internal/rest"
@@ -25,7 +24,7 @@ type JobScheduler struct {
 	jobLimit           int
 }
 
-func NewJobScheduler(cfg config2.SchedulerConfig, jobService *database.JobRepo, orderService domain.OrderService,
+func NewJobScheduler(cfg domain.SchedulerConfig, jobService *database.JobRepo, orderService domain.OrderService,
 	readMappingRepo domain.ReadMappingService) *JobScheduler {
 
 	client := retryablehttp.NewClient()
@@ -97,11 +96,12 @@ func (s JobScheduler) buildStartJobMessage(ctx context.Context, job database.Job
 	if err != nil {
 		return nil, domain.E(op, fmt.Sprintf("can't get order (%s)", orderId), err)
 	}
-	mapping, err := s.readMappingService.GetById(ctx, mappingId)
+	var mapping domain.ReadMapping
+	err = s.readMappingService.GetById(ctx, mappingId, &mapping)
 	if err != nil {
 		return nil, domain.E(op, fmt.Sprintf("can't get read mapping (%s)", mappingId), err)
 	}
-	body, err := buildStartJobBody(ctx, mapping, order.Body)
+	body, err := buildStartJobBody(ctx, &mapping, order.Body)
 	if err != nil {
 		return nil, domain.E(op, "can't build job body", err)
 	}

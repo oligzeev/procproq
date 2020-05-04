@@ -35,7 +35,8 @@ func (h MappingRestHandler) Register(router *gin.Engine) {
 // @Router /mapping/{id} [get]
 func (h MappingRestHandler) getReadMappingById(c *gin.Context) {
 	id := c.Param(ParamId)
-	result, err := h.readMappingService.GetById(c.Request.Context(), id)
+	var result domain.ReadMapping
+	err := h.readMappingService.GetById(c.Request.Context(), id, &result)
 	if err != nil {
 		log.Error(err)
 		if domain.ECode(err) == domain.ErrNotFound {
@@ -58,7 +59,8 @@ func (h MappingRestHandler) getReadMappingById(c *gin.Context) {
 // @Failure 500 {object} domain.Error
 // @Router /mapping [get]
 func (h MappingRestHandler) getReadMappings(c *gin.Context) {
-	results, err := h.readMappingService.GetAll(c.Request.Context())
+	var results []domain.ReadMapping
+	err := h.readMappingService.GetAll(c.Request.Context(), &results)
 	if err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, E(err))
@@ -107,11 +109,11 @@ func (h MappingRestHandler) createReadMapping(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	result, err := h.readMappingService.Create(c.Request.Context(), &obj)
+	err := h.readMappingService.Create(c.Request.Context(), &obj)
 	if err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, obj)
 }

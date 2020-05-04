@@ -22,34 +22,36 @@ func NewCachedReadMappingService(cacheSize int, service domain.ReadMappingServic
 	return &CachedReadMappingService{service: service, cache: cache}, nil
 }
 
-func (s CachedReadMappingService) GetAll(ctx context.Context) ([]domain.ReadMapping, error) {
+func (s CachedReadMappingService) GetAll(ctx context.Context, result *[]domain.ReadMapping) error {
 	// Don't use cache
-	return s.service.GetAll(ctx)
+	return s.service.GetAll(ctx, result)
 }
 
-func (s CachedReadMappingService) Create(ctx context.Context, obj *domain.ReadMapping) (*domain.ReadMapping, error) {
-	result, err := s.service.Create(ctx, obj)
+func (s CachedReadMappingService) Create(ctx context.Context, obj *domain.ReadMapping) error {
+	err := s.service.Create(ctx, obj)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.cache.Add(obj.Id, obj)
-	return result, nil
+	return nil
 }
 
-func (s CachedReadMappingService) GetById(ctx context.Context, id string) (*domain.ReadMapping, error) {
+func (s CachedReadMappingService) GetById(ctx context.Context, id string, result *domain.ReadMapping) error {
 	const op = "CachedReadMappingService.GetById"
 
 	if cachedObj, exists := s.cache.Get(id); exists {
 		if obj, ok := cachedObj.(*domain.ReadMapping); ok {
-			return obj, nil
+			// Propagate values from cache
+			domain.CloneReadMapping(obj, result)
+			return nil
 		}
-		return nil, domain.E(op, fmt.Sprintf("incorrect type of cached object (%T)", cachedObj))
+		return domain.E(op, fmt.Sprintf("incorrect type of cached object (%T)", cachedObj))
 	} else {
-		obj, err := s.service.GetById(ctx, id)
-		if err == nil && obj != nil {
-			s.cache.Add(obj.Id, obj)
+		err := s.service.GetById(ctx, id, result)
+		if err == nil {
+			s.cache.Add(result.Id, result)
 		}
-		return obj, err
+		return err
 	}
 }
 

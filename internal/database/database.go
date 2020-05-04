@@ -6,7 +6,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	config2 "example.com/oligzeev/pp-gin/internal/config"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"fmt"
 	"github.com/google/uuid"
@@ -38,7 +37,7 @@ func (b *Body) Scan(value interface{}) error {
 }
 
 // For more usages of sqlx see https://jmoiron.github.io/sqlx/
-func Connect(cfg config2.DbConfig) (*sqlx.DB, error) {
+func Connect(cfg domain.DbConfig) (*sqlx.DB, error) {
 	const op = "Database.Connect"
 
 	cs := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
