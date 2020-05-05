@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 )
 
 const (
@@ -56,98 +54,104 @@ type TaskRelation struct {
 
 // TBD It could be improved by storing jsonb or batch execution
 // ProcessRepo via postgres database
-type ProcessRepo struct {
-	db *sqlx.DB
+type ProcessRepo interface {
+	GetAll(ctx context.Context, result *[]Process) error
+	Create(ctx context.Context, obj *Process) error
+	GetById(ctx context.Context, id string, result *Process) error
+	DeleteById(ctx context.Context, id string) error
 }
 
-func NewProcessRepo(db *sqlx.DB) *ProcessRepo {
-	return &ProcessRepo{db: db}
+type RDBProcessRepo struct {
+	db          DB
+	newUUIDFunc NewUUIDFunc
 }
 
-func (s ProcessRepo) GetAll(ctx context.Context) ([]Process, error) {
+func NewRDBProcessRepo(db DB, newUUIDFunc NewUUIDFunc) ProcessRepo {
+	return &RDBProcessRepo{db: db, newUUIDFunc: newUUIDFunc}
+}
+
+func (s RDBProcessRepo) GetAll(ctx context.Context, processes *[]Process) error {
 	const op = "ProcessRepo.GetAll"
 
-	var processes []Process
-	if err := s.db.SelectContext(ctx, &processes, getProcesses); err != nil {
-		return nil, domain.E(op, "can't select processes", err)
+	if err := s.db.SelectContext(ctx, processes, getProcesses); err != nil {
+		return domain.E(op, "can't select processes", err)
 	}
 	if processes == nil {
-		return make([]Process, 0), nil
+		return nil
 	}
 	var tasks []Task
 	if err := s.db.SelectContext(ctx, &tasks, getTasks); err != nil {
-		return nil, domain.E(op, "can't select tasks", err)
+		return domain.E(op, "can't select tasks", err)
 	}
 	var relations []TaskRelation
 	if err := s.db.SelectContext(ctx, &relations, getTaskRelations); err != nil {
-		return nil, domain.E(op, "can't select task relations", err)
+		return domain.E(op, "can't select task relations", err)
 	}
-	for i, process := range processes {
+	for i, process := range *processes {
 		for _, task := range tasks {
 			if task.ProcessId == process.Id {
-				processes[i].AddTask(&task)
+				(*processes)[i].AddTask(&task)
 			}
 		}
 		for _, relation := range relations {
 			if relation.ProcessId == process.Id {
-				processes[i].AddTaskRelation(&relation)
+				(*processes)[i].AddTaskRelation(&relation)
 			}
 		}
 	}
-	return processes, nil
+	return nil
 }
 
-func (s ProcessRepo) Create(ctx context.Context, process *Process) (*Process, error) {
+func (s RDBProcessRepo) Create(ctx context.Context, process *Process) error {
 	const op = "ProcessRepo.Create"
 
 	if tx, ok := TransactionFromContext(ctx); ok {
-		id, err := uuid.NewUUID()
+		id, err := s.newUUIDFunc()
 		if err != nil {
-			return nil, domain.E(op, "can't generate uuid", err)
+			return domain.E(op, "can't generate uuid", err)
 		}
 		process.Id = id.String()
 
-		if _, err := tx.Exec(createProcess, process.Id, process.Name); err != nil {
-			return nil, domain.E(op, "can't insert process", err)
+		if _, err := tx.ExecContext(ctx, createProcess, process.Id, process.Name); err != nil {
+			return domain.E(op, "can't insert process", err)
 		}
 		for _, task := range process.Tasks {
-			if _, err := tx.Exec(createTask, process.Id, task.Id, task.Name, task.Category, task.Action,
+			if _, err := tx.ExecContext(ctx, createTask, process.Id, task.Id, task.Name, task.Category, task.Action,
 				task.ReadMappingId); err != nil {
 
-				return nil, domain.E(op, fmt.Sprintf("can't insert task (%s, %s)", process.Id, task.Id), err)
+				return domain.E(op, fmt.Sprintf("can't insert task (%s, %s)", process.Id, task.Id), err)
 			}
 		}
 		for _, rel := range process.TaskRelations {
-			if _, err := tx.Exec(createTaskRelation, process.Id, rel.ParentId, rel.ChildId); err != nil {
-				return nil, domain.E(op, fmt.Sprintf("can't insert task relation (%s, %s, %s)", process.Id,
+			if _, err := tx.ExecContext(ctx, createTaskRelation, process.Id, rel.ParentId, rel.ChildId); err != nil {
+				return domain.E(op, fmt.Sprintf("can't insert task relation (%s, %s, %s)", process.Id,
 					rel.ParentId, rel.ChildId), err)
 			}
 		}
-		return process, nil
+		return nil
 	}
-	return nil, domain.E(op, "there's no active transaction")
+	return domain.E(op, "there's no active transaction")
 }
 
-func (s ProcessRepo) GetById(ctx context.Context, id string) (*Process, error) {
+func (s RDBProcessRepo) GetById(ctx context.Context, id string, result *Process) error {
 	const op = "ProcessRepo.GetById"
 
-	var process Process
-	if err := s.db.GetContext(ctx, &process, getProcessById, id); err != nil {
+	if err := s.db.GetContext(ctx, result, getProcessById, id); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.E(op, domain.ErrNotFound)
+			return domain.E(op, domain.ErrNotFound)
 		}
-		return nil, domain.E(op, fmt.Sprintf("can't select process (%s)", id), err)
+		return domain.E(op, fmt.Sprintf("can't select process (%s)", id), err)
 	}
-	if err := s.db.SelectContext(ctx, &process.Tasks, getTasksByProcessId, id); err != nil {
-		return nil, domain.E(op, fmt.Sprintf("can't select tasks (%s)", id), err)
+	if err := s.db.SelectContext(ctx, &result.Tasks, getTasksByProcessId, id); err != nil {
+		return domain.E(op, fmt.Sprintf("can't select tasks (%s)", id), err)
 	}
-	if err := s.db.SelectContext(ctx, &process.TaskRelations, getTaskRelationsByProcessId, id); err != nil {
-		return nil, domain.E(op, fmt.Sprintf("can't select task relations (%s)", id), err)
+	if err := s.db.SelectContext(ctx, &result.TaskRelations, getTaskRelationsByProcessId, id); err != nil {
+		return domain.E(op, fmt.Sprintf("can't select task relations (%s)", id), err)
 	}
-	return &process, nil
+	return nil
 }
 
-func (s ProcessRepo) DeleteById(ctx context.Context, id string) error {
+func (s RDBProcessRepo) DeleteById(ctx context.Context, id string) error {
 	const op = "ProcessRepo.DeleteById"
 
 	if tx, ok := TransactionFromContext(ctx); ok {

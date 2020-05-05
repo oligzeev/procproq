@@ -14,25 +14,25 @@ func NewSpanOrderService(service domain.OrderService) *SpanOrderService {
 	return &SpanOrderService{service: service}
 }
 
-func (s SpanOrderService) SubmitOrder(ctx context.Context, order *domain.Order, processId string) (*domain.Order, error) {
+func (s SpanOrderService) SubmitOrder(ctx context.Context, order *domain.Order, processId string) error {
 	const op = "OrderService.SubmitOrder"
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
 	return s.service.SubmitOrder(spanCtx, order, processId)
 }
 
-func (s SpanOrderService) GetOrders(ctx context.Context) ([]domain.Order, error) {
+func (s SpanOrderService) GetOrders(ctx context.Context, result *[]domain.Order) error {
 	const op = "OrderService.GetOrders"
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.service.GetOrders(spanCtx)
+	return s.service.GetOrders(spanCtx, result)
 }
 
-func (s SpanOrderService) GetOrderById(ctx context.Context, id string) (*domain.Order, error) {
+func (s SpanOrderService) GetOrderById(ctx context.Context, id string, result *domain.Order) error {
 	const op = "OrderService.GetOrderById"
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.service.GetOrderById(spanCtx, id)
+	return s.service.GetOrderById(spanCtx, id, result)
 }
 
 func (s SpanOrderService) CompleteJob(ctx context.Context, taskId, orderId string) error {

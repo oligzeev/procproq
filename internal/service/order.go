@@ -4,92 +4,110 @@ import (
 	"context"
 	"example.com/oligzeev/pp-gin/internal/database"
 	"example.com/oligzeev/pp-gin/internal/domain"
-	"github.com/jmoiron/sqlx"
 )
+
+func toOrder(from *database.Order, to *domain.Order) {
+	to.Id = from.Id
+	to.ProcessId = from.ProcessId
+	to.Body = domain.Body(from.Body)
+}
+
+func fromOrder(from *domain.Order, to *database.Order) {
+	to.Id = from.Id
+	to.ProcessId = from.ProcessId
+	to.Body = database.Body(from.Body)
+}
 
 func toOrders(arr []database.Order) []domain.Order {
 	result := make([]domain.Order, len(arr))
 	for i, obj := range arr {
-		result[i].Id = obj.Id
-		result[i].ProcessId = obj.ProcessId
-		result[i].Body = domain.Body(obj.Body)
+		toOrder(&obj, &result[i])
 	}
 	return result
 }
 
-func toOrder(obj *database.Order) *domain.Order {
-	return &domain.Order{Id: obj.Id, ProcessId: obj.ProcessId, Body: domain.Body(obj.Body)}
-}
-
-func fromOrder(obj *domain.Order) *database.Order {
-	return &database.Order{Id: obj.Id, ProcessId: obj.ProcessId, Body: database.Body(obj.Body)}
-}
-
 type OrderService struct {
-	db             *sqlx.DB
 	processService domain.ProcessService
-	orderRepo      *database.OrderRepo
-	jobRepo        *database.JobRepo
+	orderRepo      database.OrderRepo
+	jobRepo        database.JobRepo
+	execTxFunc     domain.ExecTxFunc
 }
 
-func NewOrderService(db *sqlx.DB, processService domain.ProcessService, orderRepo *database.OrderRepo,
-	jobRepo *database.JobRepo) *OrderService {
+func NewOrderService(processService domain.ProcessService, orderRepo database.OrderRepo, jobRepo database.JobRepo,
+	execTxFunc domain.ExecTxFunc) *OrderService {
 
-	return &OrderService{db: db, processService: processService, orderRepo: orderRepo, jobRepo: jobRepo}
+	return &OrderService{
+		processService: processService,
+		orderRepo:      orderRepo,
+		jobRepo:        jobRepo,
+		execTxFunc:     execTxFunc,
+	}
 }
 
-func (s OrderService) SubmitOrder(ctx context.Context, order *domain.Order, processId string) (*domain.Order, error) {
+func (s OrderService) SubmitOrder(ctx context.Context, order *domain.Order, processId string) error {
 	const op = "OrderService.SubmitOrder"
 
-	process, err := s.processService.GetById(ctx, processId)
-	if err != nil {
-		return nil, domain.E(op, err)
+	var process domain.Process
+	if err := s.processService.GetById(ctx, processId, &process); err != nil {
+		return domain.E(op, err)
 	}
 	order.ProcessId = processId
-	result, err := database.ExecTx(ctx, s.db, func(txCtx context.Context) (interface{}, error) {
-		resultOrder, err := s.orderRepo.Create(txCtx, fromOrder(order))
-		if err != nil {
-			return nil, err
+	err := s.execTxFunc(ctx, func(txCtx context.Context) error {
+		var repoOrder database.Order
+		fromOrder(order, &repoOrder)
+		if err := s.orderRepo.Create(txCtx, &repoOrder); err != nil {
+			return err
 		}
+
 		// TBD remove redundant operation 'fromProcess'
-		err = s.jobRepo.CreateJobs(txCtx, resultOrder.Id, fromProcess(process))
-		if err != nil {
-			return nil, err
+		var repoProcess database.Process
+		fromProcess(&process, &repoProcess)
+		if err := s.jobRepo.CreateJobs(txCtx, repoOrder.Id, &repoProcess); err != nil {
+			return err
 		}
-		return resultOrder, nil
+
+		// Propagate generated id
+		order.Id = repoOrder.Id
+		return nil
 	})
 	if err != nil {
-		return nil, domain.E(op, err)
+		return domain.E(op, err)
 	}
-	return toOrder(result.(*database.Order)), nil
+	return nil
 }
 
-func (s OrderService) GetOrders(ctx context.Context) ([]domain.Order, error) {
+func (s OrderService) GetOrders(ctx context.Context, result *[]domain.Order) error {
 	const op = "OrderService.GetOrders"
 
-	result, err := s.orderRepo.GetAll(ctx)
-	if err != nil {
-		return nil, domain.E(op, err)
+	var repoResult []database.Order
+	if err := s.orderRepo.GetAll(ctx, &repoResult); err != nil {
+		return domain.E(op, err)
 	}
-	return toOrders(result), nil
+
+	// Propagate result
+	*result = toOrders(repoResult)
+	return nil
 }
 
-func (s OrderService) GetOrderById(ctx context.Context, id string) (*domain.Order, error) {
+func (s OrderService) GetOrderById(ctx context.Context, id string, result *domain.Order) error {
 	const op = "OrderService.GetOrderById"
 
 	// TBD Have to enrich current order state
-	result, err := s.orderRepo.GetById(ctx, id)
-	if err != nil {
-		return nil, domain.E(op, err)
+	var repoResult database.Order
+	if err := s.orderRepo.GetById(ctx, id, &repoResult); err != nil {
+		return domain.E(op, err)
 	}
-	return toOrder(result), nil
+
+	// Propagate result
+	toOrder(&repoResult, result)
+	return nil
 }
 
 func (s OrderService) CompleteJob(ctx context.Context, taskId, orderId string) error {
 	const op = "OrderService.CompleteJob"
 
-	_, err := database.ExecTx(ctx, s.db, func(txCtx context.Context) (interface{}, error) {
-		return nil, s.jobRepo.CompleteJob(txCtx, taskId, orderId)
+	err := s.execTxFunc(ctx, func(txCtx context.Context) error {
+		return s.jobRepo.CompleteJob(txCtx, taskId, orderId)
 	})
 	if err != nil {
 		return domain.E(op, err)

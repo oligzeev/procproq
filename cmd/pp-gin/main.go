@@ -37,24 +37,40 @@ import (
 // @version 0.0.1
 // @description This is a PP-Gin application.
 func main() {
+	// Initialize configuration
 	cfg := initConfig("config/pp-gin.yaml", "pp")
+
+	// Initialize logger
 	initLogger(cfg.Logging)
+
+	// Initialize database connection
 	db := initDatabase(cfg.DB)
 
+	// Initialize open tracing
 	_, closer := initTracing(cfg.Tracing)
 	defer closer.Close()
 
-	readMappingRepo := database.NewReadMappingRepo(db, uuid.NewUUID)
-	processRepo := database.NewProcessRepo(db)
-	jobRepo := database.NewJobRepo(db)
-	orderRepo := database.NewOrderRepo(db)
+	// Initialize repositories
+	newUUIDFunc := func() (uuid.UUID, error) {
+		return uuid.NewUUID()
+	}
+	readMappingRepo := database.NewRDBReadMappingRepo(db, newUUIDFunc)
+	processRepo := database.NewRDBProcessRepo(db, newUUIDFunc)
+	jobRepo := database.NewRDBJobRepo(db)
+	orderRepo := database.NewRDBOrderRepo(db, newUUIDFunc)
 
+	// Initialize services
+	execTxFunc := func(ctx context.Context, f domain.TxFunc) error {
+		return database.ExecTx(ctx, db, f)
+	}
 	readMappingService := NewReadMappingService(cfg.Cache, readMappingRepo)
-	processService := NewProcessService(cfg.Cache, db, processRepo)
-	orderService := NewOrderService(cfg.Cache, db, processService, orderRepo, jobRepo)
+	processService := NewProcessService(cfg.Cache, processRepo, execTxFunc)
+	orderService := NewOrderService(cfg.Cache, processService, orderRepo, jobRepo, execTxFunc)
 
+	// Initialize scheduler
 	initScheduler(cfg.Scheduler, jobRepo, orderService, readMappingService)
 
+	// Initialize rest server
 	router := initRouter(*cfg, []domain.RestHandler{
 		rest.NewMappingRestHandler(readMappingService),
 		rest.NewProcessRestHandler(processService),
@@ -68,7 +84,7 @@ func main() {
 // *** Initialize components ***
 // *****************************
 
-func initScheduler(cfg domain.SchedulerConfig, jobRepo *database.JobRepo, orderService domain.OrderService,
+func initScheduler(cfg domain.SchedulerConfig, jobRepo database.JobRepo, orderService domain.OrderService,
 	readMappingService domain.ReadMappingService) {
 	if cfg.Enabled {
 		scheduler := service.NewJobScheduler(cfg, jobRepo, orderService, readMappingService)
@@ -191,27 +207,29 @@ func initServer(cfg domain.RestConfig, r *gin.Engine) {
 // *** Create repositories ***
 // ***************************
 
-func NewReadMappingService(cfg domain.CacheConfig, repo *database.ReadMappingRepo) domain.ReadMappingService {
-	service, err := cache.NewCachedReadMappingService(cfg.DefaultEntityCount, service.NewReadMappingService(repo))
+func NewReadMappingService(cfg domain.CacheConfig, repo database.ReadMappingRepo) domain.ReadMappingService {
+	s := service.NewReadMappingService(repo)
+	cached, err := cache.NewCachedReadMappingService(cfg.DefaultEntityCount, s)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return tracing.NewSpanReadMappingService(service)
+	return tracing.NewSpanReadMappingService(cached)
 }
 
-func NewProcessService(cfg domain.CacheConfig, db *sqlx.DB, repo *database.ProcessRepo) domain.ProcessService {
-	service, err := cache.NewCachedProcessRepo(cfg.DefaultEntityCount, service.NewProcessService(db, repo))
+func NewProcessService(cfg domain.CacheConfig, repo database.ProcessRepo, txFunc domain.ExecTxFunc) domain.ProcessService {
+	s := service.NewProcessService(repo, txFunc)
+	cached, err := cache.NewCachedProcessRepo(cfg.DefaultEntityCount, s)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return tracing.NewSpanProcessService(service)
+	return tracing.NewSpanProcessService(cached)
 }
 
-func NewOrderService(cfg domain.CacheConfig, db *sqlx.DB, processService domain.ProcessService,
-	orderRepo *database.OrderRepo, jobRepo *database.JobRepo) domain.OrderService {
+func NewOrderService(cfg domain.CacheConfig, processService domain.ProcessService, orderRepo database.OrderRepo,
+	jobRepo database.JobRepo, txFunc domain.ExecTxFunc) domain.OrderService {
 
-	service := service.NewOrderService(db, processService, orderRepo, jobRepo)
-	cached, err := cache.NewCachedOrderService(cfg.DefaultEntityCount, service)
+	s := service.NewOrderService(processService, orderRepo, jobRepo, txFunc)
+	cached, err := cache.NewCachedOrderService(cfg.DefaultEntityCount, s)
 	if err != nil {
 		log.Fatal(err)
 	}

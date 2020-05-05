@@ -40,19 +40,18 @@ func (s CachedReadMappingService) GetById(ctx context.Context, id string, result
 	const op = "CachedReadMappingService.GetById"
 
 	if cachedObj, exists := s.cache.Get(id); exists {
-		if obj, ok := cachedObj.(*domain.ReadMapping); ok {
+		if cachedMapping, ok := cachedObj.(*domain.ReadMapping); ok {
 			// Propagate values from cache
-			domain.CloneReadMapping(obj, result)
+			domain.CloneReadMapping(cachedMapping, result)
 			return nil
 		}
 		return domain.E(op, fmt.Sprintf("incorrect type of cached object (%T)", cachedObj))
-	} else {
-		err := s.service.GetById(ctx, id, result)
-		if err == nil {
-			s.cache.Add(result.Id, result)
-		}
+	}
+	if err := s.service.GetById(ctx, id, result); err != nil {
 		return err
 	}
+	s.cache.Add(result.Id, result)
+	return nil
 }
 
 func (s CachedReadMappingService) DeleteById(ctx context.Context, id string) error {

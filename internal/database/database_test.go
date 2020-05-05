@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"example.com/oligzeev/pp-gin/internal/domain"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/mock"
 	"testing"
 )
@@ -42,6 +43,26 @@ func (m MockDB) ExecContext(ctx context.Context, query string, args ...interface
 	} else {
 		return nil, arguments.Error(1)
 	}
+}
+
+func (m MockDB) BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
+	arguments := m.Called(ctx, opts)
+	result := arguments.Get(0)
+	if result != nil {
+		return result.(*sqlx.Tx), arguments.Error(1)
+	} else {
+		return nil, arguments.Error(1)
+	}
+}
+
+func (m MockDB) Commit() error {
+	arguments := m.Called()
+	return arguments.Error(0)
+}
+
+func (m MockDB) Rollback() error {
+	arguments := m.Called()
+	return arguments.Error(0)
 }
 
 type MockResult struct {

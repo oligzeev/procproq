@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 )
 
 const (
@@ -22,30 +20,37 @@ type Order struct {
 	Body      Body   `db:"body"`
 }
 
-type OrderRepo struct {
-	db *sqlx.DB
+type OrderRepo interface {
+	Create(ctx context.Context, obj *Order) error
+	GetAll(ctx context.Context, result *[]Order) error
+	GetById(ctx context.Context, id string, result *Order) error
+	DeleteById(ctx context.Context, id string) error
 }
 
-func NewOrderRepo(db *sqlx.DB) *OrderRepo {
-	return &OrderRepo{db: db}
+type RDBOrderRepo struct {
+	db          DB
+	newUUIDFunc NewUUIDFunc
 }
 
-func (s OrderRepo) GetAll(ctx context.Context) ([]Order, error) {
+func NewRDBOrderRepo(db DB, newUUIDFunc NewUUIDFunc) OrderRepo {
+	return &RDBOrderRepo{db: db, newUUIDFunc: newUUIDFunc}
+}
+
+func (s RDBOrderRepo) GetAll(ctx context.Context, result *[]Order) error {
 	const op = "OrderRepo.GetAll"
 
-	var order []Order
-	if err := s.db.SelectContext(ctx, &order, getOrders); err != nil {
-		return nil, domain.E(op, err)
+	if err := s.db.SelectContext(ctx, result, getOrders); err != nil {
+		return domain.E(op, err)
 	}
-	return order, nil
+	return nil
 }
 
-func (s OrderRepo) Create(ctx context.Context, obj *Order) (*Order, error) {
+func (s RDBOrderRepo) Create(ctx context.Context, obj *Order) error {
 	const op = "OrderRepo.Create"
 
-	id, err := uuid.NewUUID()
+	id, err := s.newUUIDFunc()
 	if err != nil {
-		return nil, domain.E(op, "can't generate uuid", err)
+		return domain.E(op, "can't generate uuid", err)
 	}
 	obj.Id = id.String()
 
@@ -55,26 +60,25 @@ func (s OrderRepo) Create(ctx context.Context, obj *Order) (*Order, error) {
 		_, err = s.db.ExecContext(ctx, createOrder, obj.Id, obj.ProcessId, Body(obj.Body))
 	}
 	if err != nil {
-		return nil, domain.E(op, fmt.Errorf("can't create order (%s)", obj.ProcessId), err)
+		return domain.E(op, fmt.Errorf("can't create order (%s)", obj.ProcessId), err)
 	}
-	return obj, nil
+	return nil
 }
 
-func (s OrderRepo) GetById(ctx context.Context, id string) (*Order, error) {
+func (s RDBOrderRepo) GetById(ctx context.Context, id string, result *Order) error {
 	const op = "OrderRepo.GetById"
 
-	var result Order
-	if err := s.db.GetContext(ctx, &result, getOrderById, id); err != nil {
+	if err := s.db.GetContext(ctx, result, getOrderById, id); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, domain.E(op, domain.ErrNotFound)
+			return domain.E(op, domain.ErrNotFound)
 		}
-		return nil, domain.E(op, err)
+		return domain.E(op, err)
 	}
-	return &result, nil
+	return nil
 }
 
 // Delete order by Id
-func (s OrderRepo) DeleteById(ctx context.Context, id string) error {
+func (s RDBOrderRepo) DeleteById(ctx context.Context, id string) error {
 	const op = "OrderRepo.DeleteById"
 
 	result, err := s.db.ExecContext(ctx, deleteOrderById, id)

@@ -22,35 +22,36 @@ func NewCachedProcessRepo(cacheSize int, service domain.ProcessService) (*Cached
 	return &CachedProcessService{service: service, cache: cache}, nil
 }
 
-func (s CachedProcessService) GetAll(ctx context.Context) ([]domain.Process, error) {
+func (s CachedProcessService) GetAll(ctx context.Context, result *[]domain.Process) error {
 	// Don't use cache
-	return s.service.GetAll(ctx)
+	return s.service.GetAll(ctx, result)
 }
 
-func (s CachedProcessService) Create(ctx context.Context, obj *domain.Process) (*domain.Process, error) {
-	result, err := s.service.Create(ctx, obj)
+func (s CachedProcessService) Create(ctx context.Context, obj *domain.Process) error {
+	err := s.service.Create(ctx, obj)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.cache.Add(obj.Id, obj)
-	return result, nil
+	return nil
 }
 
-func (s CachedProcessService) GetById(ctx context.Context, id string) (*domain.Process, error) {
+func (s CachedProcessService) GetById(ctx context.Context, id string, result *domain.Process) error {
 	const op = "CachedProcessService.GetById"
 
 	if cachedObj, exists := s.cache.Get(id); exists {
-		if obj, ok := cachedObj.(*domain.Process); ok {
-			return obj, nil
+		if cachedProcess, ok := cachedObj.(*domain.Process); ok {
+			// Propagate values from cache
+			domain.CloneProcess(cachedProcess, result)
+			return nil
 		}
-		return nil, domain.E(op, fmt.Sprintf("incorrect type of cached object (%T)", cachedObj))
-	} else {
-		obj, err := s.service.GetById(ctx, id)
-		if err == nil && obj != nil {
-			s.cache.Add(obj.Id, obj)
-		}
-		return obj, err
+		return domain.E(op, fmt.Sprintf("incorrect type of cached object (%T)", cachedObj))
 	}
+	if err := s.service.GetById(ctx, id, result); err != nil {
+		return err
+	}
+	s.cache.Add(result.Id, result)
+	return nil
 }
 
 func (s CachedProcessService) DeleteById(ctx context.Context, id string) error {

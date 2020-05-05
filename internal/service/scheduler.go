@@ -15,7 +15,7 @@ import (
 )
 
 type JobScheduler struct {
-	jobRepo            *database.JobRepo
+	jobRepo            database.JobRepo
 	orderService       domain.OrderService
 	readMappingService domain.ReadMappingService
 	client             *retryablehttp.Client
@@ -24,7 +24,7 @@ type JobScheduler struct {
 	jobLimit           int
 }
 
-func NewJobScheduler(cfg domain.SchedulerConfig, jobService *database.JobRepo, orderService domain.OrderService,
+func NewJobScheduler(cfg domain.SchedulerConfig, jobService database.JobRepo, orderService domain.OrderService,
 	readMappingRepo domain.ReadMappingService) *JobScheduler {
 
 	client := retryablehttp.NewClient()
@@ -53,8 +53,8 @@ func (s JobScheduler) schedule() {
 	const op = "JobScheduler.Schedule"
 
 	log.Trace(op + ": schedule")
-	jobs, err := s.jobRepo.GetReadyJobs(context.Background(), s.jobLimit)
-	if err != nil {
+	var jobs []database.Job
+	if err := s.jobRepo.GetReadyJobs(context.Background(), s.jobLimit, &jobs); err != nil {
 		log.Error(domain.E(op, "can't get ready jobs", err))
 		return
 	}
@@ -92,13 +92,12 @@ func (s JobScheduler) schedule() {
 func (s JobScheduler) buildStartJobMessage(ctx context.Context, job database.Job, orderId, mappingId string) ([]byte, error) {
 	const op = "JobScheduler.BuildStartJobMessage"
 
-	order, err := s.orderService.GetOrderById(ctx, orderId)
-	if err != nil {
+	var order domain.Order
+	if err := s.orderService.GetOrderById(ctx, orderId, &order); err != nil {
 		return nil, domain.E(op, fmt.Sprintf("can't get order (%s)", orderId), err)
 	}
 	var mapping domain.ReadMapping
-	err = s.readMappingService.GetById(ctx, mappingId, &mapping)
-	if err != nil {
+	if err := s.readMappingService.GetById(ctx, mappingId, &mapping); err != nil {
 		return nil, domain.E(op, fmt.Sprintf("can't get read mapping (%s)", mappingId), err)
 	}
 	body, err := buildStartJobBody(ctx, &mapping, order.Body)

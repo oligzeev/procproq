@@ -22,7 +22,7 @@ func NewCachedOrderService(cacheSize int, service domain.OrderService) (*CachedO
 	return &CachedOrderService{service: service, cache: cache}, nil
 }
 
-func (s CachedOrderService) SubmitOrder(ctx context.Context, order *domain.Order, processId string) (*domain.Order, error) {
+func (s CachedOrderService) SubmitOrder(ctx context.Context, order *domain.Order, processId string) error {
 	/*result, err := s.service.SubmitOrder(ctx, order, processId)
 	if err != nil {
 		return nil, err
@@ -32,25 +32,26 @@ func (s CachedOrderService) SubmitOrder(ctx context.Context, order *domain.Order
 	return s.service.SubmitOrder(ctx, order, processId)
 }
 
-func (s CachedOrderService) GetOrders(ctx context.Context) ([]domain.Order, error) {
-	return s.service.GetOrders(ctx)
+func (s CachedOrderService) GetOrders(ctx context.Context, result *[]domain.Order) error {
+	return s.service.GetOrders(ctx, result)
 }
 
-func (s CachedOrderService) GetOrderById(ctx context.Context, id string) (*domain.Order, error) {
+func (s CachedOrderService) GetOrderById(ctx context.Context, id string, result *domain.Order) error {
 	const op = "CachedReadMappingService.GetOrderById"
 
 	if cachedObj, exists := s.cache.Get(id); exists {
-		if obj, ok := cachedObj.(*domain.Order); ok {
-			return obj, nil
+		if cachedOrder, ok := cachedObj.(*domain.Order); ok {
+			// Propagate values from cache
+			domain.CloneOrder(cachedOrder, result)
+			return nil
 		}
-		return nil, domain.E(op, fmt.Sprintf("incorrect type of cached object (%T)", cachedObj))
-	} else {
-		obj, err := s.service.GetOrderById(ctx, id)
-		if err == nil && obj != nil {
-			s.cache.Add(obj.Id, obj)
-		}
-		return obj, err
+		return domain.E(op, fmt.Sprintf("incorrect type of cached object (%T)", cachedObj))
 	}
+	if err := s.service.GetOrderById(ctx, id, result); err != nil {
+		return err
+	}
+	s.cache.Add(result.Id, result)
+	return nil
 }
 
 func (s CachedOrderService) CompleteJob(ctx context.Context, taskId, orderId string) error {

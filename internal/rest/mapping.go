@@ -36,8 +36,7 @@ func (h MappingRestHandler) Register(router *gin.Engine) {
 func (h MappingRestHandler) getReadMappingById(c *gin.Context) {
 	id := c.Param(ParamId)
 	var result domain.ReadMapping
-	err := h.readMappingService.GetById(c.Request.Context(), id, &result)
-	if err != nil {
+	if err := h.readMappingService.GetById(c.Request.Context(), id, &result); err != nil {
 		log.Error(err)
 		if domain.ECode(err) == domain.ErrNotFound {
 			c.Status(http.StatusNotFound)
@@ -60,8 +59,7 @@ func (h MappingRestHandler) getReadMappingById(c *gin.Context) {
 // @Router /mapping [get]
 func (h MappingRestHandler) getReadMappings(c *gin.Context) {
 	var results []domain.ReadMapping
-	err := h.readMappingService.GetAll(c.Request.Context(), &results)
-	if err != nil {
+	if err := h.readMappingService.GetAll(c.Request.Context(), &results); err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
@@ -81,8 +79,7 @@ func (h MappingRestHandler) getReadMappings(c *gin.Context) {
 // @Router /mapping/{id} [delete]
 func (h MappingRestHandler) deleteReadMappingById(c *gin.Context) {
 	id := c.Param(ParamId)
-	err := h.readMappingService.DeleteById(c.Request.Context(), id)
-	if err != nil {
+	if err := h.readMappingService.DeleteById(c.Request.Context(), id); err != nil {
 		log.Error(err)
 		if domain.ECode(err) == domain.ErrNotFound {
 			c.Status(http.StatusNotFound)
@@ -109,8 +106,7 @@ func (h MappingRestHandler) createReadMapping(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	err := h.readMappingService.Create(c.Request.Context(), &obj)
-	if err != nil {
+	if err := h.readMappingService.Create(c.Request.Context(), &obj); err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, E(err))
 		return

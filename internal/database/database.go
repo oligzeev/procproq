@@ -16,10 +16,19 @@ import (
 
 type NewUUIDFunc func() (uuid.UUID, error)
 
+type Tx interface {
+	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	Commit() error
+	Rollback() error
+}
+
 type DB interface {
 	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error)
 }
 
 type Body domain.Body
@@ -58,35 +67,34 @@ type txContextKey string
 
 const txKey txContextKey = "transaction"
 
-func WithTransaction(ctx context.Context, tx *sqlx.Tx) context.Context {
+func WithTransaction(ctx context.Context, tx Tx) context.Context {
 	return context.WithValue(ctx, txKey, tx)
 }
 
-func TransactionFromContext(ctx context.Context) (*sqlx.Tx, bool) {
-	tx, ok := ctx.Value(txKey).(*sqlx.Tx)
+func TransactionFromContext(ctx context.Context) (Tx, bool) {
+	tx, ok := ctx.Value(txKey).(Tx)
 	return tx, ok
 }
 
 // Execute function in a database transaction
-type txFunc func(txCtx context.Context) (interface{}, error)
-
-func ExecTx(ctx context.Context, db *sqlx.DB, f txFunc) (interface{}, error) {
+func ExecTx(ctx context.Context, db DB, f domain.TxFunc) error {
 	const op = "Transaction.Exec"
 
-	tx, err := db.BeginTxx(ctx, nil)
+	sqlTx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		return nil, domain.E(op, "can't begin transaction", err)
+		return domain.E(op, "can't begin transaction", err)
 	}
+	var tx Tx = sqlTx
+
 	txCtx := WithTransaction(ctx, tx)
-	result, err := f(txCtx)
-	if err != nil {
-		if err := tx.Rollback(); err != nil {
-			return nil, domain.E(op, "can't rollback transaction", err)
+	if err = f(txCtx); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return domain.E(op, "can't rollback transaction", rbErr)
 		}
-		return nil, domain.E(op, "transaction has rolled back", err)
+		return domain.E(op, "transaction has rolled back", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, domain.E(op, "can't commit transaction", err)
+		return domain.E(op, "can't commit transaction", err)
 	}
-	return result, nil
+	return nil
 }

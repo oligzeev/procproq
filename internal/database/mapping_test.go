@@ -15,10 +15,10 @@ func TestReadMappingRepo_GetAll_Success(t *testing.T) {
 	var readMappings []ReadMapping
 
 	mockDB := new(MockDB)
-	mockDB.On("SelectContext", testCtx, &readMappings, GetReadMappings,
+	mockDB.On("SelectContext", testCtx, &readMappings, getReadMappings,
 		[]interface{}(nil)).Return(nil)
 
-	repo := ReadMappingRepo{db: mockDB}
+	repo := RDBReadMappingRepo{db: mockDB}
 	err := repo.GetAll(testCtx, &readMappings)
 	assert.Nil(err)
 }
@@ -32,9 +32,9 @@ func TestReadMappingRepo_GetAll_Error(t *testing.T) {
 	mockErr := errors.New("mock error")
 
 	mockDB := new(MockDB)
-	mockDB.On("SelectContext", testCtx, &readMappings, GetReadMappings, []interface{}(nil)).Return(mockErr)
+	mockDB.On("SelectContext", testCtx, &readMappings, getReadMappings, []interface{}(nil)).Return(mockErr)
 
-	repo := ReadMappingRepo{db: mockDB}
+	repo := RDBReadMappingRepo{db: mockDB}
 	err := repo.GetAll(testCtx, &readMappings)
 
 	assert.NotNil(err)
@@ -52,10 +52,10 @@ func TestReadMappingRepo_Create_Success(t *testing.T) {
 	strUUID := mockUUID.String()
 
 	mockDB := new(MockDB)
-	mockDB.On("ExecContext", testCtx, CreateReadMapping,
+	mockDB.On("ExecContext", testCtx, createReadMapping,
 		[]interface{}{strUUID, readMapping.Body}).Return(nil, nil)
 
-	repo := ReadMappingRepo{db: mockDB, newUUIDFunc: func() (uuid.UUID, error) {
+	repo := RDBReadMappingRepo{db: mockDB, newUUIDFunc: func() (uuid.UUID, error) {
 		return mockUUID, nil
 	}}
 	err := repo.Create(testCtx, readMapping)
@@ -75,7 +75,7 @@ func TestReadMappingRepo_Create_UUID(t *testing.T) {
 	mockDB := new(MockDB)
 	mockErr := errors.New("mock error")
 
-	repo := ReadMappingRepo{db: mockDB, newUUIDFunc: func() (uuid.UUID, error) {
+	repo := RDBReadMappingRepo{db: mockDB, newUUIDFunc: func() (uuid.UUID, error) {
 		var mockUUID uuid.UUID
 		return mockUUID, mockErr
 	}}
@@ -100,10 +100,10 @@ func TestReadMappingRepo_Create_Error(t *testing.T) {
 
 	mockDB := new(MockDB)
 	mockErr := errors.New("mock error")
-	mockDB.On("ExecContext", testCtx, CreateReadMapping,
+	mockDB.On("ExecContext", testCtx, createReadMapping,
 		[]interface{}{strUUID, readMapping.Body}).Return(nil, mockErr)
 
-	repo := ReadMappingRepo{db: mockDB, newUUIDFunc: func() (uuid.UUID, error) {
+	repo := RDBReadMappingRepo{db: mockDB, newUUIDFunc: func() (uuid.UUID, error) {
 		return mockUUID, nil
 	}}
 	err := repo.Create(testCtx, readMapping)
@@ -121,10 +121,10 @@ func TestReadMappingRepo_GetById_Success(t *testing.T) {
 	readMapping := &ReadMapping{}
 
 	mockDB := new(MockDB)
-	mockDB.On("GetContext", testCtx, readMapping, GetReadMappingById,
+	mockDB.On("GetContext", testCtx, readMapping, getReadMappingById,
 		[]interface{}{id}).Return(nil)
 
-	repo := ReadMappingRepo{db: mockDB}
+	repo := RDBReadMappingRepo{db: mockDB}
 	err := repo.GetById(testCtx, id, readMapping)
 	assert.Nil(err)
 }
@@ -139,10 +139,10 @@ func TestReadMappingRepo_GetById_NotFound(t *testing.T) {
 	readMapping := &ReadMapping{}
 
 	mockDB := new(MockDB)
-	mockDB.On("GetContext", testCtx, readMapping, GetReadMappingById,
+	mockDB.On("GetContext", testCtx, readMapping, getReadMappingById,
 		[]interface{}{id}).Return(sql.ErrNoRows)
 
-	repo := ReadMappingRepo{db: mockDB}
+	repo := RDBReadMappingRepo{db: mockDB}
 	err := repo.GetById(testCtx, id, readMapping)
 
 	assert.NotNil(err)
@@ -163,9 +163,9 @@ func TestReadMappingRepo_GetById_Error(t *testing.T) {
 	readMapping := &ReadMapping{}
 
 	mockDB := new(MockDB)
-	mockDB.On("GetContext", testCtx, readMapping, GetReadMappingById, []interface{}{id}).Return(mockErr)
+	mockDB.On("GetContext", testCtx, readMapping, getReadMappingById, []interface{}{id}).Return(mockErr)
 
-	repo := ReadMappingRepo{db: mockDB}
+	repo := RDBReadMappingRepo{db: mockDB}
 	err := repo.GetById(testCtx, id, readMapping)
 
 	assert.NotNil(err)
@@ -182,9 +182,9 @@ func TestReadMappingRepo_DeleteById_Success(t *testing.T) {
 	mockResult.On("RowsAffected").Return(1, nil)
 
 	mockDB := new(MockDB)
-	mockDB.On("ExecContext", testCtx, DeleteReadMappingById, []interface{}{id}).Return(mockResult, nil)
+	mockDB.On("ExecContext", testCtx, deleteReadMappingById, []interface{}{id}).Return(mockResult, nil)
 
-	repo := ReadMappingRepo{db: mockDB}
+	repo := RDBReadMappingRepo{db: mockDB}
 	err := repo.DeleteById(testCtx, id)
 	assert.Nil(err)
 }
@@ -200,9 +200,9 @@ func TestReadMappingRepo_DeleteById_NotFound(t *testing.T) {
 	mockResult.On("RowsAffected").Return(0, nil)
 
 	mockDB := new(MockDB)
-	mockDB.On("ExecContext", testCtx, DeleteReadMappingById, []interface{}{id}).Return(mockResult, nil)
+	mockDB.On("ExecContext", testCtx, deleteReadMappingById, []interface{}{id}).Return(mockResult, nil)
 
-	repo := ReadMappingRepo{db: mockDB}
+	repo := RDBReadMappingRepo{db: mockDB}
 	err := repo.DeleteById(testCtx, id)
 
 	assert.NotNil(err)
@@ -221,10 +221,10 @@ func TestReadMappingRepo_DeleteById_Error(t *testing.T) {
 	mockErr := errors.New("mock error")
 
 	mockDB := new(MockDB)
-	mockDB.On("ExecContext", testCtx, DeleteReadMappingById,
+	mockDB.On("ExecContext", testCtx, deleteReadMappingById,
 		[]interface{}{id}).Return(nil, mockErr)
 
-	repo := ReadMappingRepo{db: mockDB}
+	repo := RDBReadMappingRepo{db: mockDB}
 	err := repo.DeleteById(testCtx, id)
 
 	assert.NotNil(err)

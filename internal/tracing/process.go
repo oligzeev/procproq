@@ -14,25 +14,25 @@ func NewSpanProcessService(service domain.ProcessService) *SpanProcessService {
 	return &SpanProcessService{service: service}
 }
 
-func (s SpanProcessService) GetAll(ctx context.Context) ([]domain.Process, error) {
+func (s SpanProcessService) GetAll(ctx context.Context, result *[]domain.Process) error {
 	const op = "ProcessService.GetAll"
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.service.GetAll(spanCtx)
+	return s.service.GetAll(spanCtx, result)
 }
 
-func (s SpanProcessService) Create(ctx context.Context, obj *domain.Process) (*domain.Process, error) {
+func (s SpanProcessService) Create(ctx context.Context, obj *domain.Process) error {
 	const op = "ProcessService.Create"
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
 	return s.service.Create(spanCtx, obj)
 }
 
-func (s SpanProcessService) GetById(ctx context.Context, id string) (*domain.Process, error) {
+func (s SpanProcessService) GetById(ctx context.Context, id string, result *domain.Process) error {
 	const op = "ProcessService.GetById"
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, op)
 	defer span.Finish()
-	return s.service.GetById(spanCtx, id)
+	return s.service.GetById(spanCtx, id, result)
 }
 
 func (s SpanProcessService) DeleteById(ctx context.Context, id string) error {

@@ -33,15 +33,21 @@ type Job struct {
 	Trace         string `db:"trace"`
 }
 
-type JobRepo struct {
+type JobRepo interface {
+	CreateJobs(ctx context.Context, orderId string, process *Process) error
+	GetReadyJobs(ctx context.Context, jobLimit int, jobs *[]Job) error
+	CompleteJob(ctx context.Context, taskId, orderId string) error
+}
+
+type RDBJobRepo struct {
 	db *sqlx.DB
 }
 
-func NewJobRepo(db *sqlx.DB) *JobRepo {
-	return &JobRepo{db: db}
+func NewRDBJobRepo(db *sqlx.DB) JobRepo {
+	return &RDBJobRepo{db: db}
 }
 
-func (s JobRepo) CreateJobs(ctx context.Context, orderId string, process *Process) error {
+func (s RDBJobRepo) CreateJobs(ctx context.Context, orderId string, process *Process) error {
 	const op = "JobRepo.CreateJobs"
 
 	if tx, ok := TransactionFromContext(ctx); ok {
@@ -68,17 +74,16 @@ func (s JobRepo) CreateJobs(ctx context.Context, orderId string, process *Proces
 	return domain.E(op, "there's no active transaction")
 }
 
-func (s JobRepo) GetReadyJobs(ctx context.Context, jobLimit int) ([]Job, error) {
+func (s RDBJobRepo) GetReadyJobs(ctx context.Context, jobLimit int, jobs *[]Job) error {
 	const op = "JobRepo.GetReadyJobs"
 
-	var jobs []Job
-	if err := s.db.SelectContext(ctx, &jobs, getReadyJobs, jobLimit); err != nil {
-		return nil, domain.E(op, err)
+	if err := s.db.SelectContext(ctx, jobs, getReadyJobs, jobLimit); err != nil {
+		return domain.E(op, err)
 	}
-	return jobs, nil
+	return nil
 }
 
-func (s JobRepo) CompleteJob(ctx context.Context, taskId, orderId string) error {
+func (s RDBJobRepo) CompleteJob(ctx context.Context, taskId, orderId string) error {
 	const op = "JobRepo.CompleteJob"
 
 	if tx, ok := TransactionFromContext(ctx); ok {

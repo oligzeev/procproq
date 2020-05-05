@@ -32,10 +32,10 @@ func toReadMappings(arr []database.ReadMapping) []domain.ReadMapping {
 }
 
 type ReadMappingService struct {
-	repo *database.ReadMappingRepo
+	repo database.ReadMappingRepo
 }
 
-func NewReadMappingService(readMappingRepo *database.ReadMappingRepo) *ReadMappingService {
+func NewReadMappingService(readMappingRepo database.ReadMappingRepo) *ReadMappingService {
 	return &ReadMappingService{repo: readMappingRepo}
 }
 
@@ -43,8 +43,7 @@ func (s ReadMappingService) GetAll(ctx context.Context, result *[]domain.ReadMap
 	const op = "ReadMappingService.GetAll"
 
 	var repoResult []database.ReadMapping
-	err := s.repo.GetAll(ctx, &repoResult)
-	if err != nil {
+	if err := s.repo.GetAll(ctx, &repoResult); err != nil {
 		return domain.E(op, err)
 	}
 
@@ -58,8 +57,7 @@ func (s ReadMappingService) Create(ctx context.Context, result *domain.ReadMappi
 
 	var dbResult database.ReadMapping
 	fromReadMapping(result, &dbResult)
-	err := s.repo.Create(ctx, &dbResult)
-	if err != nil {
+	if err := s.repo.Create(ctx, &dbResult); err != nil {
 		return domain.E(op, err)
 	}
 
@@ -67,10 +65,11 @@ func (s ReadMappingService) Create(ctx context.Context, result *domain.ReadMappi
 	result.Id = dbResult.Id
 
 	// Prepare jsonpath evaluators
-	result.PreparedBody, err = prepareBody(result.Body)
+	preparedBody, err := prepareBody(result.Body)
 	if err != nil {
 		return domain.E(op, err)
 	}
+	result.PreparedBody = preparedBody
 	return nil
 }
 
@@ -78,8 +77,7 @@ func (s ReadMappingService) GetById(ctx context.Context, id string, result *doma
 	const op = "ReadMappingService.GetById"
 
 	var mapping database.ReadMapping
-	err := s.repo.GetById(ctx, id, &mapping)
-	if err != nil {
+	if err := s.repo.GetById(ctx, id, &mapping); err != nil {
 		return domain.E(op, err)
 	}
 
@@ -87,10 +85,11 @@ func (s ReadMappingService) GetById(ctx context.Context, id string, result *doma
 	toReadMapping(&mapping, result)
 
 	// Prepare jsonpath evaluators
-	result.PreparedBody, err = prepareBody(result.Body)
+	preparedBody, err := prepareBody(result.Body)
 	if err != nil {
 		return domain.E(op, err)
 	}
+	result.PreparedBody = preparedBody
 	return nil
 }
 
@@ -112,8 +111,7 @@ func prepareBody(body domain.Body) (domain.PreparedBody, error) {
 func (s ReadMappingService) DeleteById(ctx context.Context, id string) error {
 	const op = "ReadMappingService.DeleteById"
 
-	err := s.repo.DeleteById(ctx, id)
-	if err != nil {
+	if err := s.repo.DeleteById(ctx, id); err != nil {
 		return domain.E(op, err)
 	}
 	return nil

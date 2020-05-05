@@ -35,7 +35,8 @@ func (h ProcessRestHandler) Register(router *gin.Engine) {
 // @Router /process/{id} [get]
 func (h ProcessRestHandler) getProcessById(c *gin.Context) {
 	id := c.Param(ParamId)
-	result, err := h.processService.GetById(c.Request.Context(), id)
+	var result domain.Process
+	err := h.processService.GetById(c.Request.Context(), id, &result)
 	if err != nil {
 		log.Error(err)
 		if domain.ECode(err) == domain.ErrNotFound {
@@ -58,7 +59,8 @@ func (h ProcessRestHandler) getProcessById(c *gin.Context) {
 // @Failure 500 {object} domain.Error
 // @Router /process [get]
 func (h ProcessRestHandler) getProcesses(c *gin.Context) {
-	results, err := h.processService.GetAll(c.Request.Context())
+	var results []domain.Process
+	err := h.processService.GetAll(c.Request.Context(), &results)
 	if err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, E(err))
@@ -107,11 +109,11 @@ func (h ProcessRestHandler) createProcess(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	result, err := h.processService.Create(c.Request.Context(), &obj)
+	err := h.processService.Create(c.Request.Context(), &obj)
 	if err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, obj)
 }

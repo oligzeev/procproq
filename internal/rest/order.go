@@ -34,8 +34,8 @@ func (h OrderRestHandler) Register(router *gin.Engine) {
 // @Router /order/{id} [get]
 func (h OrderRestHandler) getOrderById(c *gin.Context) {
 	id := c.Param(ParamId)
-	result, err := h.orderService.GetOrderById(c.Request.Context(), id)
-	if err != nil {
+	var result domain.Order
+	if err := h.orderService.GetOrderById(c.Request.Context(), id, &result); err != nil {
 		log.Error(err)
 		if domain.ECode(err) == domain.ErrNotFound {
 			c.Status(http.StatusNotFound)
@@ -57,8 +57,8 @@ func (h OrderRestHandler) getOrderById(c *gin.Context) {
 // @Failure 500 {object} domain.Error
 // @Router /order [get]
 func (h OrderRestHandler) getOrders(c *gin.Context) {
-	results, err := h.orderService.GetOrders(c.Request.Context())
-	if err != nil {
+	var results []domain.Order
+	if err := h.orderService.GetOrders(c.Request.Context(), &results); err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
@@ -85,11 +85,10 @@ func (h OrderRestHandler) submitOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	result, err := h.orderService.SubmitOrder(c.Request.Context(), &obj, processId)
-	if err != nil {
+	if err := h.orderService.SubmitOrder(c.Request.Context(), &obj, processId); err != nil {
 		log.Error(err)
 		c.JSON(http.StatusInternalServerError, E(err))
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, obj)
 }

@@ -4,36 +4,28 @@ import (
 	"context"
 	"example.com/oligzeev/pp-gin/internal/database"
 	"example.com/oligzeev/pp-gin/internal/domain"
-	"github.com/jmoiron/sqlx"
 )
+
+func toProcess(from *database.Process, to *domain.Process) {
+	to.Id = from.Id
+	to.Name = from.Name
+	to.Tasks = toTasks(from.Tasks)
+	to.TaskRelations = toTaskRelations(from.TaskRelations)
+}
+
+func fromProcess(from *domain.Process, to *database.Process) {
+	to.Id = from.Id
+	to.Name = from.Name
+	to.Tasks = fromTasks(from.Id, from.Tasks)
+	to.TaskRelations = fromTaskRelations(from.Id, from.TaskRelations)
+}
 
 func toProcesses(arr []database.Process) []domain.Process {
 	result := make([]domain.Process, len(arr))
 	for i, obj := range arr {
-		result[i].Id = obj.Id
-		result[i].Name = obj.Name
-		result[i].Tasks = toTasks(obj.Tasks)
-		result[i].TaskRelations = toTaskRelations(obj.TaskRelations)
+		toProcess(&obj, &result[i])
 	}
 	return result
-}
-
-func toProcess(obj *database.Process) *domain.Process {
-	return &domain.Process{
-		Id:            obj.Id,
-		Name:          obj.Name,
-		Tasks:         toTasks(obj.Tasks),
-		TaskRelations: toTaskRelations(obj.TaskRelations),
-	}
-}
-
-func fromProcess(obj *domain.Process) *database.Process {
-	return &database.Process{
-		Id:            obj.Id,
-		Name:          obj.Name,
-		Tasks:         fromTasks(obj.Id, obj.Tasks),
-		TaskRelations: fromTaskRelations(obj.Id, obj.TaskRelations),
-	}
 }
 
 func toTasks(arr []database.Task) []domain.Task {
@@ -81,51 +73,62 @@ func fromTaskRelations(processId string, arr []domain.TaskRelation) []database.T
 }
 
 type ProcessService struct {
-	db   *sqlx.DB
-	repo *database.ProcessRepo
+	repo       database.ProcessRepo
+	execTxFunc domain.ExecTxFunc
 }
 
-func NewProcessService(db *sqlx.DB, processRepo *database.ProcessRepo) *ProcessService {
-	return &ProcessService{db: db, repo: processRepo}
+func NewProcessService(processRepo database.ProcessRepo, execTxFunc domain.ExecTxFunc) *ProcessService {
+	return &ProcessService{repo: processRepo, execTxFunc: execTxFunc}
 }
 
-func (s ProcessService) GetAll(ctx context.Context) ([]domain.Process, error) {
+func (s ProcessService) GetAll(ctx context.Context, result *[]domain.Process) error {
 	const op = "ProcessService.GetAll"
 
-	result, err := s.repo.GetAll(ctx)
-	if err != nil {
-		return nil, domain.E(op, err)
+	var repoResult []database.Process
+	if err := s.repo.GetAll(ctx, &repoResult); err != nil {
+		return domain.E(op, err)
 	}
-	return toProcesses(result), nil
+
+	// Propagate result
+	*result = toProcesses(repoResult)
+	return nil
 }
 
-func (s ProcessService) Create(ctx context.Context, process *domain.Process) (*domain.Process, error) {
+func (s ProcessService) Create(ctx context.Context, result *domain.Process) error {
 	const op = "ProcessService.Create"
 
-	result, err := database.ExecTx(ctx, s.db, func(txCtx context.Context) (interface{}, error) {
-		return s.repo.Create(txCtx, fromProcess(process))
+	var repoResult database.Process
+	fromProcess(result, &repoResult)
+	err := s.execTxFunc(ctx, func(txCtx context.Context) error {
+		return s.repo.Create(txCtx, &repoResult)
 	})
 	if err != nil {
-		return nil, domain.E(op, err)
+		return domain.E(op, err)
 	}
-	return toProcess(result.(*database.Process)), nil
+
+	// Propagate generated id
+	result.Id = repoResult.Id
+	return nil
 }
 
-func (s ProcessService) GetById(ctx context.Context, id string) (*domain.Process, error) {
+func (s ProcessService) GetById(ctx context.Context, id string, result *domain.Process) error {
 	const op = "ProcessService.GetById"
 
-	result, err := s.repo.GetById(ctx, id)
-	if err != nil {
-		return nil, domain.E(op, err)
+	var repoResult database.Process
+	if err := s.repo.GetById(ctx, id, &repoResult); err != nil {
+		return domain.E(op, err)
 	}
-	return toProcess(result), err
+
+	// Propagate result
+	toProcess(&repoResult, result)
+	return nil
 }
 
 func (s ProcessService) DeleteById(ctx context.Context, id string) error {
 	const op = "ProcessService.DeleteById"
 
-	_, err := database.ExecTx(ctx, s.db, func(txCtx context.Context) (interface{}, error) {
-		return nil, s.repo.DeleteById(txCtx, id)
+	err := s.execTxFunc(ctx, func(txCtx context.Context) error {
+		return s.repo.DeleteById(txCtx, id)
 	})
 	if err != nil {
 		return domain.E(op, err)
