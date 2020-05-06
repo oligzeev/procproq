@@ -1,7 +1,8 @@
 package main
 
 import (
-	config2 "example.com/oligzeev/pp-gin/internal/config"
+	appconf "example.com/oligzeev/pp-gin/internal/config"
+	"example.com/oligzeev/pp-gin/internal/domain"
 	"example.com/oligzeev/pp-gin/internal/metric"
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/tracing"
@@ -30,20 +31,20 @@ func main() {
 // *** Initialize components ***
 // *****************************
 
-func initConfig(yamlFileName, envPrefix string) *config2.ApplicationConfig {
-	appConfig, err := config2.ReadConfig(yamlFileName, envPrefix)
+func initConfig(yamlFileName, envPrefix string) *domain.ApplicationConfig {
+	cfg, err := appconf.ReadConfig(yamlFileName, envPrefix)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return appConfig
+	return cfg
 }
 
-func initLogger(cfg config2.LoggingConfig) {
+func initLogger(cfg domain.LoggingConfig) {
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.SetLevel(log.Level(cfg.Level))
 }
 
-func initTracing(cfg config2.TracingConfig) (opentracing.Tracer, io.Closer) {
+func initTracing(cfg domain.TracingConfig) (opentracing.Tracer, io.Closer) {
 	tracingCfg := jaegerconf.Configuration{
 		ServiceName: cfg.ServiceName,
 		Sampler: &jaegerconf.SamplerConfig{
@@ -62,7 +63,7 @@ func initTracing(cfg config2.TracingConfig) (opentracing.Tracer, io.Closer) {
 	return tracer, closer
 }
 
-func initRouter(restCfg config2.RestConfig, balanceCfg config2.BalanceConfig) *gin.Engine {
+func initRouter(restCfg domain.RestConfig, balanceCfg domain.BalanceConfig) *gin.Engine {
 	router := gin.Default()
 
 	// Jaeger middleware initialization
@@ -74,7 +75,7 @@ func initRouter(restCfg config2.RestConfig, balanceCfg config2.BalanceConfig) *g
 	return router
 }
 
-func initServer(cfg config2.RestConfig, r *gin.Engine) {
+func initServer(cfg domain.RestConfig, r *gin.Engine) {
 	if err := endless.ListenAndServe(cfg.Host+":"+strconv.Itoa(cfg.Port), r); err != nil {
 		log.Fatal(err)
 	}

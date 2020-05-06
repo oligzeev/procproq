@@ -13,6 +13,7 @@ import (
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jmoiron/sqlx"
 	"github.com/opentracing/opentracing-go"
 	log "github.com/sirupsen/logrus"
@@ -86,8 +87,13 @@ func main() {
 
 func initScheduler(cfg domain.SchedulerConfig, jobRepo database.JobRepo, orderService domain.OrderService,
 	readMappingService domain.ReadMappingService) {
+
 	if cfg.Enabled {
-		scheduler := service.NewJobScheduler(cfg, jobRepo, orderService, readMappingService)
+		httpClient := retryablehttp.NewClient()
+		httpClient.RetryMax = cfg.SendJobRetriesMax
+		jobCompleteClient := rest.NewJobStartRestClient(httpClient)
+
+		scheduler := service.NewJobScheduler(cfg, jobRepo, orderService, readMappingService, jobCompleteClient)
 		scheduler.Start()
 	}
 }
