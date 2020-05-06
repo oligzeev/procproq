@@ -39,11 +39,11 @@ func NewJobScheduler(
 func (s JobScheduler) Start(groupCtx context.Context) error {
 	const op = "JobScheduler.Start"
 
-	log.Trace(op)
+	log.Tracef("%s: starting", op)
 	for {
 		select {
 		case <-groupCtx.Done():
-			log.Tracef("%s: finished", op)
+			log.Tracef("%s: exit", op)
 			return groupCtx.Err()
 		default:
 			s.schedule()
@@ -55,20 +55,20 @@ func (s JobScheduler) Start(groupCtx context.Context) error {
 func (s JobScheduler) schedule() {
 	const op = "JobScheduler.Schedule"
 
-	log.Tracef("%s: schedule", op)
+	log.Tracef("%s: get ready jobs", op)
 	var jobs []database.Job
 	if err := s.jobRepo.GetReadyJobs(context.Background(), s.jobLimit, &jobs); err != nil {
 		log.Error(domain.E(op, "can't get ready jobs", err))
 		return
 	}
 
-	log.Tracef("%s: jobs execution: %v", op, len(jobs))
+	log.Tracef("%s: jobs execution (%v)", op, len(jobs))
 	for _, job := range jobs {
 		if err := s.processJob(&job); err != nil {
 			log.Error(err)
 		}
 	}
-	log.Tracef("%s: complete: %v", op, len(jobs))
+	log.Tracef("%s: finished (%v)", op, len(jobs))
 }
 
 func (s JobScheduler) processJob(job *database.Job) error {

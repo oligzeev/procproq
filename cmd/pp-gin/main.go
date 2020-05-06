@@ -11,6 +11,7 @@ import (
 	"example.com/oligzeev/pp-gin/internal/rest"
 	"example.com/oligzeev/pp-gin/internal/service"
 	"example.com/oligzeev/pp-gin/internal/tracing"
+	"example.com/oligzeev/pp-gin/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-retryablehttp"
@@ -23,11 +24,7 @@ import (
 	jaegerconf "github.com/uber/jaeger-client-go/config"
 	"golang.org/x/sync/errgroup"
 	"io"
-	"net/http"
 	"os"
-	"os/signal"
-	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/gin-contrib/pprof"
@@ -42,7 +39,7 @@ func main() {
 	ctx, done := context.WithCancel(context.Background())
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() error {
-		return initSignalReceiver(groupCtx, done)
+		return util.StartSignalReceiver(groupCtx, done)
 	})
 
 	// Initialize configuration
@@ -90,38 +87,19 @@ func main() {
 	}
 
 	// Initialize rest server
-	router := initRouter(*cfg, []domain.RestHandler{
+	restServer := rest.NewServer(cfg.Rest.Server, []domain.RestHandler{
 		rest.NewMappingRestHandler(readMappingService),
 		rest.NewProcessRestHandler(processService),
 		rest.NewJobRestHandler(orderService),
 		rest.NewOrderRestHandler(orderService),
 	})
-	restServer := &http.Server{
-		ReadTimeout:  cfg.Rest.Server.ReadTimeoutSec * time.Second,
-		WriteTimeout: cfg.Rest.Server.WriteTimeoutSec * time.Second,
-		Addr:         cfg.Rest.Server.Host + ":" + strconv.Itoa(cfg.Rest.Server.Port),
-		Handler:      router,
-	}
+	initRouter(cfg, restServer.Router())
+
 	group.Go(func() error {
-		log.Tracef("RestServer.Starting: %s", restServer.Addr)
-		if err := restServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			return domain.E("RestServerStarter.Starting", err)
-		}
-		log.Trace("RestServer.Finished")
-		return groupCtx.Err()
+		return restServer.Start(groupCtx)
 	})
 	group.Go(func() error {
-		<-groupCtx.Done()
-		log.Trace("RestServer.Closing")
-
-		ctx, cancel := context.WithTimeout(context.Background(), cfg.Rest.Server.ShutdownTimeoutSec*time.Second)
-		defer cancel()
-
-		if err := restServer.Shutdown(ctx); err != nil {
-			return domain.E("RestServer.Closing", err)
-		}
-		log.Trace("RestServer.Closed")
-		return groupCtx.Err()
+		return restServer.Stop(groupCtx)
 	})
 
 	if err := group.Wait(); err != nil && err != context.Canceled {
@@ -132,23 +110,6 @@ func main() {
 // *****************************
 // *** Initialize components ***
 // *****************************
-
-func initSignalReceiver(groupCtx context.Context, done context.CancelFunc) error {
-	log.Trace("SignalReceiver.Starting")
-
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
-
-	select {
-	case sig := <-signalChannel:
-		log.Tracef("SignalReceiver.Done: %s", sig)
-		done()
-	case <-groupCtx.Done():
-		log.Trace("SignalReceiver.Closed")
-		return groupCtx.Err()
-	}
-	return nil
-}
 
 func initConfig(yamlFileName, envPrefix string) *domain.ApplicationConfig {
 	appConfig, err := appconf.ReadConfig(yamlFileName, envPrefix)
@@ -199,9 +160,7 @@ func initDatabase(cfg domain.DbConfig) *sqlx.DB {
 	return db
 }
 
-func initRouter(cfg domain.ApplicationConfig, handlers []domain.RestHandler) *gin.Engine {
-	router := gin.New()
-
+func initRouter(cfg *domain.ApplicationConfig, router *gin.Engine) {
 	// Logging & Recovery middleware
 	if cfg.Logging.Default {
 		router.Use(gin.Logger())
@@ -227,11 +186,6 @@ func initRouter(cfg domain.ApplicationConfig, handlers []domain.RestHandler) *gi
 	// https://github.com/gin-contrib/pprof
 	// go tool pprof http://localhost:8080/debug/pprof/profile?seconds=30
 	pprof.Register(router)
-
-	for _, handler := range handlers {
-		handler.Register(router)
-	}
-	return router
 }
 
 // ***************************

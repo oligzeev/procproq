@@ -4,21 +4,14 @@ import (
 	"bytes"
 	"context"
 	"example.com/oligzeev/pp-gin/internal/domain"
-	"example.com/oligzeev/pp-gin/internal/logging"
-	"example.com/oligzeev/pp-gin/internal/metric"
-	"example.com/oligzeev/pp-gin/internal/tracing"
-	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"net/http"
 	"strconv"
 	"time"
-
-	swaggerFiles "github.com/swaggo/files"
 )
 
 const (
@@ -64,12 +57,12 @@ func Send(ctx context.Context, client *retryablehttp.Client, url, method string,
 }
 
 type Server struct {
-	cfg        *domain.ServerRestConfig
+	cfg        domain.ServerRestConfig
 	httpServer *http.Server
 	router     *gin.Engine
 }
 
-func NewServer(cfg *domain.ServerRestConfig, handlers []domain.RestHandler) *Server {
+func NewServer(cfg domain.ServerRestConfig, handlers []domain.RestHandler) *Server {
 	router := gin.New()
 	for _, handler := range handlers {
 		handler.Register(router)
@@ -94,7 +87,7 @@ func (s Server) Start(ctx context.Context) error {
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return domain.E(op, err)
 	}
-	log.Tracef("%s: finished", op)
+	log.Tracef("%s: exit", op)
 	return ctx.Err()
 }
 
@@ -102,7 +95,7 @@ func (s Server) Stop(ctx context.Context) error {
 	const op = "RestServer.Stop"
 
 	<-ctx.Done()
-	log.Trace(op)
+	log.Tracef("%s: in progress", op)
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeoutSec*time.Second)
 	defer cancel()
