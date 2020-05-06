@@ -21,6 +21,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/uber/jaeger-client-go"
 	jaegerconf "github.com/uber/jaeger-client-go/config"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"net/http"
 	"os"
@@ -38,6 +39,12 @@ import (
 // @version 0.0.1
 // @description This is a PP-Gin application.
 func main() {
+	ctx, done := context.WithCancel(context.Background())
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		return initSignalReceiver(groupCtx, done)
+	})
+
 	// Initialize configuration
 	cfg := initConfig("config/pp-gin.yaml", "pp")
 
@@ -46,6 +53,9 @@ func main() {
 
 	// Initialize database connection
 	db := initDatabase(cfg.DB)
+	execTxFunc := func(ctx context.Context, f domain.TxFunc) error {
+		return database.ExecTx(ctx, db, f)
+	}
 
 	// Initialize open tracing
 	_, closer := initTracing(cfg.Tracing)
@@ -60,16 +70,24 @@ func main() {
 	jobRepo := database.NewRDBJobRepo(db)
 	orderRepo := database.NewRDBOrderRepo(db, newUUIDFunc)
 
+	// Initialize http clients
+	httpClient := retryablehttp.NewClient()
+	httpClient.RetryMax = cfg.Rest.Client.RetriesMax
+	httpClient.StandardClient().Timeout = cfg.Rest.Client.TimeoutSec * time.Second
+	jobStartClient := rest.NewJobStartRestClient(httpClient)
+
 	// Initialize services
-	execTxFunc := func(ctx context.Context, f domain.TxFunc) error {
-		return database.ExecTx(ctx, db, f)
-	}
 	readMappingService := NewReadMappingService(cfg.Cache, readMappingRepo)
 	processService := NewProcessService(cfg.Cache, processRepo, execTxFunc)
 	orderService := NewOrderService(cfg.Cache, processService, orderRepo, jobRepo, execTxFunc)
 
 	// Initialize scheduler
-	initScheduler(cfg.Scheduler, jobRepo, orderService, readMappingService)
+	if cfg.Scheduler.Enabled {
+		group.Go(func() error {
+			s := service.NewJobScheduler(cfg.Scheduler, jobRepo, orderService, readMappingService, jobStartClient)
+			return s.Start(groupCtx)
+		})
+	}
 
 	// Initialize rest server
 	router := initRouter(*cfg, []domain.RestHandler{
@@ -78,24 +96,58 @@ func main() {
 		rest.NewJobRestHandler(orderService),
 		rest.NewOrderRestHandler(orderService),
 	})
-	initServer(cfg.Rest, router)
+	restServer := &http.Server{
+		ReadTimeout:  cfg.Rest.Server.ReadTimeoutSec * time.Second,
+		WriteTimeout: cfg.Rest.Server.WriteTimeoutSec * time.Second,
+		Addr:         cfg.Rest.Server.Host + ":" + strconv.Itoa(cfg.Rest.Server.Port),
+		Handler:      router,
+	}
+	group.Go(func() error {
+		log.Tracef("RestServer.Starting: %s", restServer.Addr)
+		if err := restServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return domain.E("RestServerStarter.Starting", err)
+		}
+		log.Trace("RestServer.Finished")
+		return groupCtx.Err()
+	})
+	group.Go(func() error {
+		<-groupCtx.Done()
+		log.Trace("RestServer.Closing")
+
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.Rest.Server.ShutdownTimeoutSec*time.Second)
+		defer cancel()
+
+		if err := restServer.Shutdown(ctx); err != nil {
+			return domain.E("RestServer.Closing", err)
+		}
+		log.Trace("RestServer.Closed")
+		return groupCtx.Err()
+	})
+
+	if err := group.Wait(); err != nil && err != context.Canceled {
+		log.Error(err)
+	}
 }
 
 // *****************************
 // *** Initialize components ***
 // *****************************
 
-func initScheduler(cfg domain.SchedulerConfig, jobRepo database.JobRepo, orderService domain.OrderService,
-	readMappingService domain.ReadMappingService) {
+func initSignalReceiver(groupCtx context.Context, done context.CancelFunc) error {
+	log.Trace("SignalReceiver.Starting")
 
-	if cfg.Enabled {
-		httpClient := retryablehttp.NewClient()
-		httpClient.RetryMax = cfg.SendJobRetriesMax
-		jobCompleteClient := rest.NewJobStartRestClient(httpClient)
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 
-		scheduler := service.NewJobScheduler(cfg, jobRepo, orderService, readMappingService, jobCompleteClient)
-		scheduler.Start()
+	select {
+	case sig := <-signalChannel:
+		log.Tracef("SignalReceiver.Done: %s", sig)
+		done()
+	case <-groupCtx.Done():
+		log.Trace("SignalReceiver.Closed")
+		return groupCtx.Err()
 	}
+	return nil
 }
 
 func initConfig(yamlFileName, envPrefix string) *domain.ApplicationConfig {
@@ -165,11 +217,11 @@ func initRouter(cfg domain.ApplicationConfig, handlers []domain.RestHandler) *gi
 
 	// Swagger handler initialization
 	// From the root directory: swag init --dir ./ --generalInfo ./cmd/pp-gin/main.go --output ./api/swagger
-	router.GET(cfg.Rest.SwaggerUrl+"/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	router.GET(cfg.Rest.Server.SwaggerUrl+"/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Prometheus handler initialization
 	// prom := ginprom.NewPrometheus("gin") and prom.Use(router)
-	router.GET(cfg.Rest.MetricsUrl, metric.PrometheusHandler())
+	router.GET(cfg.Rest.Server.MetricsUrl, metric.PrometheusHandler())
 
 	// PProf handler initialization
 	// https://github.com/gin-contrib/pprof
@@ -180,33 +232,6 @@ func initRouter(cfg domain.ApplicationConfig, handlers []domain.RestHandler) *gi
 		handler.Register(router)
 	}
 	return router
-}
-
-// E.g. https://github.com/gin-gonic/examples/blob/master/graceful-shutdown/graceful-shutdown/server.go
-func initServer(cfg domain.RestConfig, r *gin.Engine) {
-	srv := &http.Server{
-		Addr:    cfg.Host + ":" + strconv.Itoa(cfg.Port),
-		Handler: r,
-	}
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
-		}
-	}()
-
-	quit := make(chan os.Signal)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Info("Closing rest server")
-
-	// TBD Close scheduler gracefully
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TBD Configurable timeout
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Rest server forced to Close: %v", err)
-	}
-	log.Info("Rest server has been closed")
 }
 
 // ***************************

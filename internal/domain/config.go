@@ -1,11 +1,25 @@
 package domain
 
+import "time"
+
+type ServerRestConfig struct {
+	Host               string        `yaml:"host"`
+	Port               int           `yaml:"port"`
+	SwaggerUrl         string        `yaml:"swaggerUrl"`
+	MetricsUrl         string        `yaml:"metricsUrl"`
+	ReadTimeoutSec     time.Duration `yaml:"readTimeoutSec"`
+	WriteTimeoutSec    time.Duration `yaml:"writeTimeoutSec"`
+	ShutdownTimeoutSec time.Duration `yaml:"shutdownTimeoutSec"`
+}
+
+type ClientRestConfig struct {
+	RetriesMax int           `yaml:"retriesMax"`
+	TimeoutSec time.Duration `yaml:"timeoutSec"`
+}
+
 type RestConfig struct {
-	Host             string `yaml:"host"`
-	Port             int    `yaml:"port"`
-	SwaggerUrl       string `yaml:"swaggerUrl"`
-	MetricsUrl       string `yaml:"metricsUrl"`
-	ClientRetriesMax int    `yaml:"clientRetriesMax"`
+	Server ServerRestConfig `yaml:"server"`
+	Client ClientRestConfig `yaml:"client"`
 }
 
 type DbConfig struct {
@@ -38,17 +52,13 @@ type BalanceConfig struct {
 }
 
 type SchedulerConfig struct {
-	Enabled           bool `yaml:"enabled"`
-	PeriodSec         int  `yaml:"periodSec"`
-	SendJobTimeoutSec int  `yaml:"sendJobTimeoutSec"`
-	SendJobRetriesMax int  `yaml:"sendJobRetriesMax"`
-	JobLimit          int  `yaml:"jobLimit"`
+	Enabled   bool          `yaml:"enabled"`
+	PeriodSec time.Duration `yaml:"periodSec"`
+	JobLimit  int           `yaml:"jobLimit"`
 }
 
 type StubConfig struct {
-	ResponseUrl       string `yaml:"responseUrl"`
-	SendJobTimeoutSec int    `yaml:"sendJobTimeoutSec"`
-	SendJobRetriesMax int    `yaml:"sendJobRetriesMax"`
+	ResponseUrl string `yaml:"responseUrl"`
 }
 
 // Possible tags in https://github.com/kelseyhightower/envconfig

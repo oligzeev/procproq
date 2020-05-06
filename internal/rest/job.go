@@ -64,10 +64,11 @@ func (c JobCompleteRestClient) Complete(ctx context.Context, msg *domain.JobComp
 		return domain.E(op, fmt.Sprintf("can't marshal request (%s, %s)", msg.TaskId, msg.OrderId), err)
 	}
 
-	_, err = Send(ctx, c.client, c.baseUrl+"/complete/", http.MethodPost, msgBytes)
+	response, err := Send(ctx, c.client, c.baseUrl+"/complete/", http.MethodPost, msgBytes)
 	if err != nil {
 		return domain.E(op, fmt.Sprintf("can't send request (%s, %s)", msg.TaskId, msg.OrderId), err)
 	}
+	defer response.Body.Close()
 
 	// TDB Check status code
 
@@ -90,10 +91,11 @@ func (c JobStartRestClient) Start(ctx context.Context, dest string, msg *domain.
 		return domain.E(op, fmt.Sprintf("can't marshal request (%s, %s)", msg.TaskId, msg.OrderId), err)
 	}
 
-	_, err = Send(ctx, c.client, dest, http.MethodPost, msgBytes)
+	response, err := Send(ctx, c.client, dest, http.MethodPost, msgBytes)
 	if err != nil {
 		return domain.E(op, fmt.Sprintf("can't send request (%s, %s)", msg.TaskId, msg.OrderId), err)
 	}
+	defer response.Body.Close()
 
 	// TDB Check status code
 

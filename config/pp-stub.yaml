@@ -9,5 +9,3 @@ logging:
   level: 6 # trace
 stub:
   responseUrl: http://localhost:8080/job/complete
-  sendJobTimeoutSec: 60
-  sendJobRetriesMax: 2

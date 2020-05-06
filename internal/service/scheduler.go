@@ -6,7 +6,6 @@ import (
 	"example.com/oligzeev/pp-gin/internal/domain"
 	"example.com/oligzeev/pp-gin/internal/tracing"
 	"fmt"
-	"github.com/hashicorp/go-retryablehttp"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
@@ -15,32 +14,42 @@ type JobScheduler struct {
 	jobRepo            database.JobRepo
 	orderService       domain.OrderService
 	readMappingService domain.ReadMappingService
-	client             *retryablehttp.Client
 	period             time.Duration
 	jobLimit           int
 	startJobClient     domain.JobStartClient
 }
 
-func NewJobScheduler(cfg domain.SchedulerConfig, jobService database.JobRepo, orderService domain.OrderService,
-	readMappingRepo domain.ReadMappingService, startJobClient domain.JobStartClient) *JobScheduler {
-
+func NewJobScheduler(
+	cfg domain.SchedulerConfig,
+	jobService database.JobRepo,
+	orderService domain.OrderService,
+	readMappingRepo domain.ReadMappingService,
+	startJobClient domain.JobStartClient,
+) *JobScheduler {
 	return &JobScheduler{
 		jobRepo:            jobService,
 		orderService:       orderService,
 		readMappingService: readMappingRepo,
-		period:             time.Duration(cfg.PeriodSec),
+		period:             cfg.PeriodSec,
 		jobLimit:           cfg.JobLimit,
 		startJobClient:     startJobClient,
 	}
 }
 
-func (s JobScheduler) Start() {
-	go func() {
-		for {
+func (s JobScheduler) Start(groupCtx context.Context) error {
+	const op = "JobScheduler.Start"
+
+	log.Trace(op)
+	for {
+		select {
+		case <-groupCtx.Done():
+			log.Tracef("%s: finished", op)
+			return groupCtx.Err()
+		default:
 			s.schedule()
 			time.Sleep(s.period * time.Second)
 		}
-	}()
+	}
 }
 
 func (s JobScheduler) schedule() {
